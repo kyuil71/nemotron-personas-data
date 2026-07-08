@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>한국인 페르소나 추출기</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+  <header class="nav">
+    <div class="nav-inner">
+      <span class="brand">페르소나 추출기</span>
+      <a class="nav-link" href="https://huggingface.co/datasets/nvidia/Nemotron-Personas-Korea" target="_blank" rel="noopener">데이터셋 ↗</a>
+    </div>
+  </header>
+
+  <section class="hero">
+    <h1>원하는 사람을<br/>정확히 찾아냅니다.</h1>
+    <p>NVIDIA <code>Nemotron-Personas-Korea</code> 데이터에서<br class="mo"/> 특성을 골라 최대 <b>1,000명</b>을 모아 엑셀로 저장하세요.</p>
+  </section>
+
+  <main class="wrap">
+    <div id="banner" class="banner">데이터 정보를 불러오는 중…</div>
+
+    <section class="card">
+      <div class="card-head">
+        <span class="step">1</span>
+        <div>
+          <h2>특성 선택</h2>
+          <p class="lede">고르지 않은 항목은 <b>상관 없음</b>으로 두면 전체에서 찾습니다.</p>
+        </div>
+      </div>
+      <div id="filters" class="filters"></div>
+      <button id="resetBtn" class="btn ghost small">전부 상관 없음으로</button>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <span class="step">2</span>
+        <div><h2>수집 옵션</h2></div>
+      </div>
+      <div class="options">
+        <label class="opt-field">최대 인원
+          <input id="maxN" type="number" min="1" max="1000" value="1000" step="50" />
+        </label>
+        <label class="opt-field">수집 방식
+          <div class="select-wrap">
+            <select id="mode">
+              <option value="head">처음부터 순서대로</option>
+              <option value="random">무작위 위치에서</option>
+            </select>
+          </div>
+        </label>
+      </div>
+      <details class="adv">
+        <summary>고급 설정</summary>
+        <label class="opt-field token">Hugging Face 토큰
+          <input id="token" type="password" placeholder="hf_… (선택 사항)" />
+        </label>
+        <p class="fine">토큰을 넣으면 속도·안정성이 좋아집니다. 브라우저 메모리에만 임시로 두며 HF API 호출에만 사용됩니다.</p>
+      </details>
+    </section>
+
+    <section class="card run">
+      <div class="run-actions">
+        <button id="runBtn" class="btn primary">수집하기</button>
+        <button id="downloadBtn" class="btn tinted" disabled>엑셀로 저장</button>
+      </div>
+      <div id="progress" class="progress"></div>
+    </section>
+
+    <section class="card" id="previewCard" hidden>
+      <div class="card-head simple">
+        <h2>미리보기 <span id="previewCount" class="muted"></span></h2>
+      </div>
+      <div class="tablewrap"><table id="previewTable"></table></div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <a href="https://huggingface.co/datasets/nvidia/Nemotron-Personas-Korea" target="_blank" rel="noopener">nvidia/Nemotron-Personas-Korea</a> · CC BY 4.0<br/>
+    통계 기반 합성 데이터이며 실제 개인정보가 아닙니다.
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

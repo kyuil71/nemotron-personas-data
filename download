@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+env/
+
+# 결과물
+*.xlsx
+
+# Hugging Face 데이터셋 캐시 (약 2GB - 커밋하지 말 것)
+.cache/
+hf_cache/
+~/.cache/huggingface/

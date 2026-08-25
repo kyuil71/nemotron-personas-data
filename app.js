@@ -1,8 +1,9 @@
 /* =====================================================================
- * Nemotron-Personas Korea 2단계 추출기 (브라우저 전용)
+ * Nemotron-Personas Korea 2단계 추출기 (브라우저 전용 · 안정화판)
  * - 한국 데이터셋만 사용한다.
  * - 1차: 정확 조건만 서버 /filter로 적용해 최대 5,000명 후보 수집.
  * - 2차: 엑셀 업로드 없이 1차 후보군(state.stage1Rows) 안에서 정밀 필터링.
+ * - Hugging Face 429 제한을 감지해 자동 대기하며, 중단된 단계는 이어받는다.
  * ===================================================================== */
 "use strict";
 
@@ -14,14 +15,21 @@ const PAGE = 100;
 const STAGE_SIZE = 5000;
 const MAX_STAGES = 5;
 const TOTAL_CAP = STAGE_SIZE * MAX_STAGES;
-const SCAN_MIN = 1000;
-const SCAN_MAX = 500000;
 const CAT_MAX = 160;
 const CAT_OR_MAX = 60;
 const WHERE_MAX_LEN = 1900;
-const CONC_ANON = 4;
-const CONC_TOKEN = 6;
 const ANY_LABEL = "상관 없음";
+
+// Dataset Viewer API는 한 요청에 최대 100행만 반환한다. 익명 브라우저가
+// 50개 페이지를 한꺼번에 요청하면 429가 발생할 수 있으므로 요청 간격을 둔다.
+const REQUEST_GAP_ANON_MS = 1200;
+const REQUEST_GAP_TOKEN_MS = 450;
+const REQUEST_GAP_MAX_MS = 8000;
+const RATE_LIMIT_FALLBACK_MS = 30000;
+const RATE_LIMIT_MAX_SLEEP_MS = 5 * 60 * 1000;
+const NETWORK_RETRY_BASE_MS = 4000;
+const SERVER_RETRY_BASE_MS = 5000;
+const SINGLE_REQUEST_MAX_WAIT_MS = 10 * 60 * 1000;
 
 const FALLBACK_COLUMNS = [
   "uuid", "sex", "age", "marital_status", "military_status", "family_type", "housing_type",
@@ -94,6 +102,7 @@ const state = {
   category: {},
   ranges: {},
   stageBatches: Array.from({ length: MAX_STAGES }, () => []),
+  stageCompleted: Array.from({ length: MAX_STAGES }, () => false),
   stage1Rows: [],
   finalRows: [],
   previewRows: [],
@@ -103,6 +112,16 @@ const state = {
   activeController: null,
   cancelRequested: false,
   isCollecting: false,
+  activeStageNo: null,
+};
+
+const requestRuntime = {
+  nextRequestAt: 0,
+  adaptiveGapMs: REQUEST_GAP_ANON_MS,
+  rateLimitHits: 0,
+  consecutiveSuccesses: 0,
+  recentSuccessAt: 0,
+  cooldownKind: "pacing",
 };
 
 // ---- DOM 헬퍼 --------------------------------------------------------
@@ -132,6 +151,23 @@ function setBanner(msg, type = "") {
 function setProgress(msg) { $("#progress").textContent = msg || ""; }
 function setStage2Progress(msg) { $("#stage2Progress").textContent = msg || ""; }
 function formatN(v) { return Number(v || 0).toLocaleString(); }
+function retryStatusText(info, context = "데이터 연결", savedCount = null) {
+  const wait = Math.max(1, Number(info?.waitSec) || 1);
+  const saved = savedCount == null ? "" : ` · 현재 ${formatN(savedCount)}명 안전 보관`;
+  if (info?.kind === "rate_limit") {
+    return `${context}: Hugging Face 요청 제한(HTTP 429)을 감지했습니다${saved} · ${wait}초 후 자동으로 이어서 진행합니다.`;
+  }
+  if (info?.kind === "rate_limit_or_network") {
+    return `${context}: 요청 제한 또는 일시적인 네트워크 차단을 감지했습니다${saved} · ${wait}초 후 자동으로 이어서 진행합니다.`;
+  }
+  if (info?.kind === "warming") {
+    return `${context}: 데이터 색인을 준비하고 있습니다${saved} · ${wait}초 후 자동 재확인합니다.`;
+  }
+  if (info?.kind === "server") {
+    return `${context}: Hugging Face 서버가 일시적으로 응답하지 않습니다${saved} · ${wait}초 후 자동 재시도합니다.`;
+  }
+  return `${context}: 일시적인 네트워크 오류 또는 요청 제한이 발생했습니다${saved} · ${wait}초 후 자동 재시도합니다.`;
+}
 
 // ---- 값 표시 / 텍스트 정규화 ---------------------------------------
 const VALUE_TRANSLATIONS = new Map(Object.entries({
@@ -208,6 +244,9 @@ function hasAnyKeyword(row, cols, keywords) {
 // ---- SQL / API -------------------------------------------------------
 const sqlStr = (v) => "'" + String(v).replace(/'/g, "''") + "'";
 const q = (col) => '"' + String(col).replace(/"/g, '""') + '"';
+function hasAuthToken() {
+  return Boolean(($("#token")?.value || "").trim());
+}
 function authHeaders() {
   const t = ($("#token")?.value || "").trim();
   return t ? { Authorization: "Bearer " + t } : {};
@@ -215,50 +254,197 @@ function authHeaders() {
 function checkCancelled() {
   if (state.cancelRequested) throw new Error("수집이 취소되었습니다.");
 }
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+function abortableSleep(ms) {
+  checkCancelled();
+  const signal = state.activeController?.signal;
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new Error("수집이 취소되었습니다."));
+      return;
+    }
+    const timer = setTimeout(done, Math.max(0, ms));
+    function done() {
+      if (signal) signal.removeEventListener("abort", onAbort);
+      resolve();
+    }
+    function onAbort() {
+      clearTimeout(timer);
+      signal.removeEventListener("abort", onAbort);
+      reject(new Error("수집이 취소되었습니다."));
+    }
+    if (signal) signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
+async function waitWithCountdown(ms, info, onWait) {
+  let remaining = Math.max(0, Math.round(ms));
+  while (remaining > 0) {
+    checkCancelled();
+    if (onWait) onWait({ ...info, waitSec: Math.ceil(remaining / 1000) });
+    const part = Math.min(1000, remaining);
+    await abortableSleep(part);
+    remaining -= part;
+  }
+}
+function safeHeader(res, name) {
+  try { return res?.headers?.get(name) || ""; } catch { return ""; }
+}
+function parseSecondsOrDate(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  if (/^\d+(?:\.\d+)?$/.test(raw)) return Math.max(0, Number(raw) * 1000);
+  const at = Date.parse(raw);
+  return Number.isFinite(at) ? Math.max(0, at - Date.now()) : null;
+}
+function retryAfterMs(res) {
+  const direct = parseSecondsOrDate(safeHeader(res, "retry-after"));
+  if (direct != null) return direct;
+
+  for (const name of ["ratelimit-reset", "x-ratelimit-reset"]) {
+    const raw = safeHeader(res, name);
+    if (!raw) continue;
+    const n = Number(raw);
+    if (!Number.isFinite(n)) continue;
+    return n > 1000000000 ? Math.max(0, n * 1000 - Date.now()) : Math.max(0, n * 1000);
+  }
+
+  // IETF draft 형식 예: "api";r=0;t=128
+  const rateLimit = safeHeader(res, "ratelimit");
+  const match = rateLimit.match(/(?:^|[;,]\s*)t\s*=\s*"?(\d+)"?/i)
+    || rateLimit.match(/(?:^|[;,]\s*)reset\s*=\s*"?(\d+)"?/i);
+  return match ? Number(match[1]) * 1000 : null;
+}
 function classifyHttp(status, body) {
   const b = (body || "").toLowerCase();
-  if (status === 429) return "retry";
+  if (status === 429) return "rate_limit";
   if (status === 404) return "notfound";
   if (status === 401 || status === 403) return "auth";
   if (b.includes("loading") || b.includes("index") || b.includes("try again")) return "warming";
-  if (status >= 500) return "retry";
+  if (status >= 500) return "server";
   return "fatal";
 }
+function baseRequestGap() {
+  return hasAuthToken() ? REQUEST_GAP_TOKEN_MS : REQUEST_GAP_ANON_MS;
+}
+async function waitForRequestSlot(onWait) {
+  const remaining = requestRuntime.nextRequestAt - Date.now();
+  if (remaining <= 0) return;
+  if (remaining > 1500 && requestRuntime.cooldownKind !== "pacing") {
+    await waitWithCountdown(remaining, {
+      kind: requestRuntime.cooldownKind,
+      status: requestRuntime.cooldownKind === "rate_limit" ? 429 : 0,
+      attempt: 0,
+      elapsedSec: 0,
+      message: "",
+    }, onWait);
+  } else {
+    await abortableSleep(remaining);
+  }
+}
+function noteRequestSuccess() {
+  requestRuntime.consecutiveSuccesses++;
+  requestRuntime.recentSuccessAt = Date.now();
+  if (requestRuntime.consecutiveSuccesses >= 12) {
+    requestRuntime.adaptiveGapMs = Math.max(baseRequestGap(), Math.round(requestRuntime.adaptiveGapMs * 0.9));
+    requestRuntime.rateLimitHits = Math.max(0, requestRuntime.rateLimitHits - 1);
+    requestRuntime.consecutiveSuccesses = 0;
+  }
+  requestRuntime.cooldownKind = "pacing";
+  requestRuntime.nextRequestAt = Date.now() + Math.max(baseRequestGap(), requestRuntime.adaptiveGapMs);
+}
+function noteRateLimit(waitMs, kind = "rate_limit") {
+  requestRuntime.rateLimitHits++;
+  requestRuntime.consecutiveSuccesses = 0;
+  requestRuntime.adaptiveGapMs = Math.min(
+    REQUEST_GAP_MAX_MS,
+    Math.max(baseRequestGap() * 2, Math.round(requestRuntime.adaptiveGapMs * 1.7))
+  );
+  requestRuntime.cooldownKind = kind;
+  requestRuntime.nextRequestAt = Date.now() + waitMs;
+}
+function retryDelay(kind, attempt, res) {
+  if (kind === "rate_limit" || kind === "rate_limit_or_network") {
+    const announced = retryAfterMs(res);
+    if (announced != null) return Math.min(Math.max(announced + 1000, 5000), RATE_LIMIT_MAX_SLEEP_MS);
+    const exp = RATE_LIMIT_FALLBACK_MS * Math.pow(2, Math.min(requestRuntime.rateLimitHits, 3));
+    return Math.min(exp, RATE_LIMIT_MAX_SLEEP_MS);
+  }
+  if (kind === "warming") return Math.min(5000 + attempt * 2500, 30000);
+  if (kind === "server") return Math.min(SERVER_RETRY_BASE_MS * Math.pow(2, Math.min(attempt - 1, 4)), 60000);
+  return Math.min(NETWORK_RETRY_BASE_MS * Math.pow(2, Math.min(attempt - 1, 5)), 120000);
+}
 async function fetchJson(url, opts = {}) {
-  const { maxWaitMs = 120000, onWait = null } = opts;
+  const { maxWaitMs = SINGLE_REQUEST_MAX_WAIT_MS, onWait = null } = opts;
   const start = Date.now();
   let attempt = 0;
+  let lastKind = "network";
   while (true) {
     checkCancelled();
     attempt++;
-    let status = 0, body = "", netErr = null;
+    await waitForRequestSlot(onWait);
+    let status = 0, body = "", netErr = null, res = null;
     try {
-      const res = await fetch(url, { headers: authHeaders(), mode: "cors", signal: state.activeController?.signal });
+      res = await fetch(url, {
+        headers: authHeaders(),
+        mode: "cors",
+        credentials: "omit",
+        referrerPolicy: "no-referrer",
+        signal: state.activeController?.signal,
+      });
       status = res.status;
-      if (res.ok) return await res.json();
+      if (res.ok) {
+        const data = await res.json();
+        noteRequestSuccess();
+        return data;
+      }
       body = await res.text().catch(() => "");
     } catch (e) {
       if (e && e.name === "AbortError") throw new Error("수집이 취소되었습니다.");
+      if (state.cancelRequested) throw new Error("수집이 취소되었습니다.");
       netErr = e;
     }
-    const kind = netErr ? "retry" : classifyHttp(status, body);
+    const recentSuccess = Date.now() - requestRuntime.recentSuccessAt < 30000;
+    const likelyMaskedLimit = netErr && recentSuccess && /fetch|network|load/i.test(String(netErr.message || netErr));
+    const kind = netErr ? (likelyMaskedLimit ? "rate_limit_or_network" : "network") : classifyHttp(status, body);
+    lastKind = kind;
     if (kind === "notfound") throw new Error("데이터셋을 찾을 수 없습니다. 저장소 이름을 확인하세요.");
-    if (kind === "auth") throw new Error("접근 권한이 필요합니다. 고급 설정에서 Hugging Face 토큰을 입력해 보세요.");
+    if (kind === "auth") throw new Error("접근 권한이 필요합니다. 고급 설정에서 Hugging Face 토큰을 확인해 주세요.");
     if (kind === "fatal") throw new Error(`HTTP ${status} ${(body || "").slice(0, 180)}`);
 
     const elapsed = Date.now() - start;
-    if (elapsed > maxWaitMs) {
+    if (elapsed >= maxWaitMs) {
+      if (lastKind === "rate_limit") {
+        throw new Error("Hugging Face 요청 제한(HTTP 429)이 계속되고 있습니다. 현재까지 받은 데이터는 보관했습니다. 잠시 후 같은 단계의 ‘이어서 수집’을 눌러 주세요.");
+      }
+      if (lastKind === "rate_limit_or_network") {
+        throw new Error("요청 제한 또는 네트워크 차단이 계속되고 있습니다. 현재까지 받은 데이터는 보관했습니다. 잠시 후 같은 단계의 ‘이어서 수집’을 눌러 주세요.");
+      }
       if (kind === "warming") throw new Error("데이터 색인 준비가 예상보다 오래 걸립니다. 잠시 후 다시 시도해 주세요.");
       throw new Error(netErr ? ("네트워크 오류: " + netErr.message) : `HTTP ${status} ${(body || "").slice(0, 180)}`);
     }
-    if (onWait) onWait({ warming: kind === "warming", sec: Math.round(elapsed / 1000), attempt });
-    await sleep(kind === "warming" ? Math.min(2500 + attempt * 1000, 6500) : Math.min(700 * attempt, 4500));
+
+    let waitMs = retryDelay(kind, attempt, res);
+    waitMs = Math.min(waitMs, Math.max(1000, maxWaitMs - elapsed));
+    if (kind === "rate_limit" || kind === "rate_limit_or_network") noteRateLimit(waitMs, kind);
+    else {
+      requestRuntime.cooldownKind = kind;
+      requestRuntime.nextRequestAt = Date.now() + waitMs;
+    }
+
+    await waitWithCountdown(waitMs, {
+      kind,
+      status,
+      attempt,
+      elapsedSec: Math.round(elapsed / 1000),
+      message: netErr?.message || "",
+    }, onWait);
   }
 }
 async function resolveConfigSplit() {
   try {
-    const s = await fetchJson(`${API}/splits?dataset=${encodeURIComponent(DATASET)}`, { maxWaitMs: 30000 });
+    const s = await fetchJson(`${API}/splits?dataset=${encodeURIComponent(DATASET)}`, {
+      maxWaitMs: 120000,
+      onWait: (info) => setBanner(retryStatusText(info, "데이터셋 구성 확인"), ""),
+    });
     const arr = s.splits || [];
     if (arr.length) {
       const t = arr.find((x) => x.split === "train") || arr[0];
@@ -375,9 +561,8 @@ async function loadMeta() {
 
   const url = `${API}/statistics?dataset=${encodeURIComponent(DATASET)}&config=${encodeURIComponent(config)}&split=${encodeURIComponent(split)}`;
   const data = await fetchJson(url, {
-    onWait: ({ warming, sec }) => {
-      setBanner(warming ? `한국 데이터 색인을 준비하는 중입니다… 처음 접속 시 최대 1~2분 걸릴 수 있습니다 (경과 ${sec}초)` : `한국 데이터에 연결하는 중… (경과 ${sec}초)`, "");
-    }
+    maxWaitMs: 5 * 60 * 1000,
+    onWait: (info) => setBanner(retryStatusText(info, "한국 데이터 연결"), ""),
   });
   state.total = data.num_examples ?? data.num_rows ?? null;
   state.statistics = data.statistics || [];
@@ -540,33 +725,6 @@ function buildServerWhere() {
 }
 
 // ---- 수집 로직 -------------------------------------------------------
-function scanConcurrency() { return (($("#token")?.value || "").trim()) ? CONC_TOKEN : CONC_ANON; }
-function randomPageOffset(total) {
-  if (!total || total <= PAGE) return 0;
-  const maxPage = Math.max(0, Math.floor((total - PAGE) / PAGE));
-  return Math.floor(Math.random() * (maxPage + 1)) * PAGE;
-}
-function nextOffsetFactory(total, mode) {
-  let offset = mode === "random" && total ? randomPageOffset(total) : 0;
-  const visited = new Set();
-  return () => {
-    if (!total || mode !== "random") {
-      const cur = offset;
-      offset += PAGE;
-      return cur;
-    }
-    if (visited.size >= Math.ceil(total / PAGE)) return null;
-    let cur = randomPageOffset(total);
-    let guard = 0;
-    while (visited.has(cur) && guard < 30) { cur = randomPageOffset(total); guard++; }
-    while (visited.has(cur)) {
-      cur += PAGE;
-      if (cur >= total) cur = 0;
-    }
-    visited.add(cur);
-    return cur;
-  };
-}
 function setCollectingUI(on) {
   state.isCollecting = on;
   document.querySelectorAll(".stage-collect-btn").forEach((btn) => { btn.disabled = on || !canCollectStage(Number(btn.dataset.stage)); });
@@ -596,11 +754,11 @@ function rebuildStage1Rows() {
   state.stage1Rows = merged.slice(0, TOTAL_CAP);
 }
 function completedStageCount() {
-  return state.stageBatches.filter((b) => b && b.length).length;
+  return state.stageCompleted.filter(Boolean).length;
 }
 function nextCollectableStage() {
   for (let i = 1; i <= MAX_STAGES; i++) {
-    if (!state.stageBatches[i - 1] || state.stageBatches[i - 1].length === 0) return i;
+    if (!state.stageCompleted[i - 1]) return i;
   }
   return null;
 }
@@ -608,21 +766,28 @@ function canCollectStage(stageNo) {
   if (!stageNo || stageNo < 1 || stageNo > MAX_STAGES) return false;
   if (state.isCollecting) return false;
   if (stageNo === 1) return true;
-  return state.stageBatches.slice(0, stageNo - 1).every((b) => b && b.length > 0);
+  return state.stageCompleted.slice(0, stageNo - 1).every(Boolean);
 }
 function updateStageUI() {
   rebuildStage1Rows();
   for (let i = 1; i <= MAX_STAGES; i++) {
     const batch = state.stageBatches[i - 1] || [];
+    const complete = Boolean(state.stageCompleted[i - 1]);
+    const active = state.isCollecting && state.activeStageNo === i;
     const status = $(`#stageStatus${i}`);
-    if (status) status.textContent = batch.length ? `${formatN(batch.length)}명 수집 완료` : "대기 중";
+    if (status) {
+      if (active) status.textContent = `${formatN(batch.length)}명 수집 중 · 자동 보관`;
+      else if (complete) status.textContent = `${formatN(batch.length)}명 수집 완료`;
+      else if (batch.length) status.textContent = `${formatN(batch.length)}명 임시 보관 · 이어받기 가능`;
+      else status.textContent = "대기 중";
+    }
     const btn = $(`#collectStage${i}Btn`);
     if (btn) {
       btn.disabled = state.isCollecting || !canCollectStage(i);
-      btn.textContent = batch.length ? `${i}단계 다시 수집` : `${i}단계 수집`;
+      btn.textContent = complete ? `${i}단계 다시 수집` : batch.length ? `${i}단계 이어서 수집` : `${i}단계 수집`;
     }
     const card = $(`#stageCard${i}`);
-    if (card) card.classList.toggle("done", batch.length > 0);
+    if (card) card.classList.toggle("done", complete);
   }
   const next = nextCollectableStage();
   $("#collectNextStageBtn").disabled = state.isCollecting || next == null;
@@ -635,12 +800,14 @@ function updateStageUI() {
 }
 function resetStageBatches() {
   state.stageBatches = Array.from({ length: MAX_STAGES }, () => []);
+  state.stageCompleted = Array.from({ length: MAX_STAGES }, () => false);
   state.stage1Rows = [];
   state.finalRows = [];
   state.collectionWhere = null;
   state.collectionTotal = null;
   state.previewRows = [];
   state.previewLabel = "";
+  state.activeStageNo = null;
   $("#previewCard").hidden = true;
   $("#summaryCard").hidden = true;
   setProgress("");
@@ -649,7 +816,8 @@ function resetStageBatches() {
   updateStageUI();
 }
 function ensureSameConditionOrReset(where, stageNo) {
-  if (!state.stage1Rows.length) {
+  const hasCollection = state.collectionWhere !== null || state.stageCompleted.some(Boolean) || state.stage1Rows.length > 0;
+  if (!hasCollection) {
     state.collectionWhere = where;
     return true;
   }
@@ -669,39 +837,56 @@ async function collectStageBatch(stageNo) {
   if (warnings.length) setBanner("주의 — " + warnings.join(" · "), "");
   if (!ensureSameConditionOrReset(where, stageNo)) return null;
 
-  const onWait = ({ warming, sec }) => {
-    setProgress(warming ? `데이터 색인을 준비하는 중입니다… 처음 조회 시 최대 1~2분 걸릴 수 있습니다 (경과 ${sec}초)` : `연결 중… (경과 ${sec}초)`);
-  };
-
-  checkCancelled();
-  const probe = await fetchJson(buildUrl(where, 0, 1), { onWait });
-  const total = probe.num_rows_total != null ? probe.num_rows_total : null;
-  const partial = probe.partial === true;
-  const totalTxt = total != null ? formatN(total) : "?";
+  const batchIndex = stageNo - 1;
+  const rows = [...(state.stageBatches[batchIndex] || [])].slice(0, STAGE_SIZE);
   const scopeTxt = where ? "정확 조건에 맞는" : "전체";
-  state.collectionTotal = total;
-  if (total === 0) {
-    setProgress("정확 조건에 맞는 사람이 없습니다. 조건을 완화해 보세요.");
-    return [];
-  }
-
+  let total = state.collectionTotal;
+  let partialIndex = false;
   const offsetStart = (stageNo - 1) * STAGE_SIZE;
   if (total != null && offsetStart >= total) {
-    setProgress(`${stageNo}단계 구간에 해당하는 데이터가 없습니다. ${scopeTxt} 데이터는 총 ${totalTxt}명입니다.`);
+    setProgress(`${stageNo}단계 구간에 해당하는 데이터가 없습니다. ${scopeTxt} 데이터는 총 ${formatN(total)}명입니다.`);
     return [];
   }
 
-  const rows = [];
+  const onWait = (info) => {
+    const msg = retryStatusText(info, `1차 후보수집-${stageNo}단계`, rows.length);
+    setProgress(msg);
+    if (info.kind === "rate_limit" || info.kind === "rate_limit_or_network") {
+      setBanner("요청 제한 또는 일시적인 네트워크 차단을 감지했습니다. 받은 데이터는 유지되며 연결이 회복되면 자동으로 이어서 수집합니다.", "");
+    }
+  };
+
   while (rows.length < STAGE_SIZE) {
     checkCancelled();
     const offset = offsetStart + rows.length;
     let need = Math.min(PAGE, STAGE_SIZE - rows.length);
     if (total != null) need = Math.min(need, Math.max(0, total - offset));
     if (need <= 0) break;
-    const data = await fetchJson(buildUrl(where, offset, need), { onWait });
+    const data = await fetchJson(buildUrl(where, offset, need), {
+      maxWaitMs: SINGLE_REQUEST_MAX_WAIT_MS,
+      onWait,
+    });
+    if (data.num_rows_total != null) {
+      total = data.num_rows_total;
+      state.collectionTotal = total;
+    }
+    partialIndex = partialIndex || data.partial === true;
+    if (total === 0) {
+      setProgress("정확 조건에 맞는 사람이 없습니다. 조건을 완화해 보세요.");
+      return [];
+    }
     const got = mapRows(data.rows);
     rows.push(...got);
-    setProgress(`1차 후보수집-${stageNo}단계 진행 중… ${formatN(rows.length)} / ${formatN(STAGE_SIZE)}명 · ${scopeTxt} ${totalTxt}명 · 검색 구간 ${formatN(offsetStart + 1)}~${formatN(offsetStart + STAGE_SIZE)}` + (partial ? " · 부분 인덱스" : ""));
+
+    // 페이지를 받을 때마다 상태에 반영한다. 이후 요청이 실패하거나 사용자가
+    // 취소해도 받은 행은 사라지지 않고 같은 단계에서 이어받을 수 있다.
+    state.stageBatches[batchIndex] = rows.slice(0, STAGE_SIZE);
+    rebuildStage1Rows();
+    state.finalRows = [...state.stage1Rows];
+    updateStageUI();
+
+    const totalTxt = total != null ? formatN(total) : "?";
+    setProgress(`1차 후보수집-${stageNo}단계 진행 중… ${formatN(rows.length)} / ${formatN(STAGE_SIZE)}명 · ${scopeTxt} ${totalTxt}명 · 받은 위치 ${formatN(offsetStart + 1)}~${formatN(offsetStart + rows.length)}` + (partialIndex ? " · 부분 인덱스" : ""));
     if (got.length === 0 || got.length < need) break;
   }
   return rows.slice(0, STAGE_SIZE);
@@ -855,7 +1040,7 @@ function saveJsonFile(obj, filename) {
 function saveProject() {
   const project = {
     app: "Nemotron-Personas-Korea-Multistage",
-    version: 2,
+    version: 3,
     savedAt: new Date().toISOString(),
     dataset: DATASET,
     config: state.config,
@@ -866,6 +1051,7 @@ function saveProject() {
     category: state.category,
     ranges: state.ranges,
     stageBatches: state.stageBatches,
+    stageCompleted: state.stageCompleted,
     finalRows: state.finalRows,
     stage2: currentStage2State(),
   };
@@ -884,10 +1070,14 @@ function openProjectFile(file) {
       }
       state.category = data.category && typeof data.category === "object" ? data.category : {};
       state.ranges = data.ranges && typeof data.ranges === "object" ? data.ranges : {};
-      state.collectionWhere = data.collectionWhere || null;
+      state.collectionWhere = typeof data.collectionWhere === "string" ? data.collectionWhere : null;
       state.collectionTotal = data.collectionTotal ?? null;
       const batches = Array.isArray(data.stageBatches) ? data.stageBatches : [];
       state.stageBatches = Array.from({ length: MAX_STAGES }, (_, i) => Array.isArray(batches[i]) ? batches[i] : []);
+      const savedCompleted = Array.isArray(data.stageCompleted) ? data.stageCompleted : null;
+      state.stageCompleted = Array.from({ length: MAX_STAGES }, (_, i) => (
+        savedCompleted ? Boolean(savedCompleted[i]) : state.stageBatches[i].length > 0
+      ));
       rebuildStage1Rows();
       state.finalRows = Array.isArray(data.finalRows) && data.finalRows.length ? data.finalRows : [...state.stage1Rows];
 
@@ -925,20 +1115,30 @@ function resetAll() {
 }
 async function runStage(stageNo) {
   if (!canCollectStage(stageNo)) return;
-  const existing = state.stageBatches[stageNo - 1]?.length || 0;
-  if (existing > 0) {
+  const batchIndex = stageNo - 1;
+  const existing = state.stageBatches[batchIndex]?.length || 0;
+  const wasComplete = Boolean(state.stageCompleted[batchIndex]);
+  if (wasComplete) {
     const ok = confirm(`${stageNo}단계에는 이미 ${formatN(existing)}명이 있습니다. 이 단계만 다시 수집해 교체할까요?`);
     if (!ok) return;
+    state.stageBatches[batchIndex] = [];
+    state.stageCompleted[batchIndex] = false;
+    rebuildStage1Rows();
+    state.finalRows = [...state.stage1Rows];
   }
   state.cancelRequested = false;
   state.activeController = new AbortController();
+  state.activeStageNo = stageNo;
   setCollectingUI(true);
-  setProgress(`${stageNo}단계 수집 준비 중…`);
+  setProgress(existing > 0 && !wasComplete
+    ? `${stageNo}단계 이어서 수집 준비 중… ${formatN(existing)}명부터 계속합니다.`
+    : `${stageNo}단계 수집 준비 중…`);
   setStage2Progress("");
   try {
     const rows = await collectStageBatch(stageNo);
     if (rows == null) return;
-    state.stageBatches[stageNo - 1] = rows;
+    state.stageBatches[batchIndex] = rows;
+    state.stageCompleted[batchIndex] = true;
     rebuildStage1Rows();
     state.finalRows = [...state.stage1Rows];
     updateStageUI();
@@ -953,16 +1153,22 @@ async function runStage(stageNo) {
     }
   } catch (e) {
     console.error(e);
+    const saved = state.stageBatches[batchIndex]?.length || 0;
     if ((e.message || "").includes("취소")) {
-      setProgress("수집이 취소되었습니다.");
-      setBanner("수집을 취소했습니다. 이미 완료된 단계 데이터는 유지됩니다.", "");
+      setProgress(`수집이 취소되었습니다. 이번 단계에서 받은 ${formatN(saved)}명은 임시 보관했습니다.`);
+      setBanner(saved
+        ? `수집을 취소했습니다. ${stageNo}단계 ${formatN(saved)}명은 유지됩니다. ‘${stageNo}단계 이어서 수집’을 누르면 다음 위치부터 계속합니다.`
+        : "수집을 취소했습니다. 이미 완료된 단계 데이터는 유지됩니다.", "");
     } else {
-      setProgress("");
-      setBanner("데이터를 가져오지 못했습니다: " + (e.message || e) + " 네트워크를 확인하거나, 조건을 단순화하거나, 고급 설정에서 HF 토큰을 입력해 보세요.", "error");
+      setProgress(saved
+        ? `수집이 일시 중단되었습니다. ${formatN(saved)}명은 임시 보관했으며 같은 단계에서 이어받을 수 있습니다.`
+        : "수집이 일시 중단되었습니다.");
+      setBanner("데이터를 가져오지 못했습니다: " + (e.message || e), "error");
     }
   } finally {
     state.activeController = null;
     state.cancelRequested = false;
+    state.activeStageNo = null;
     setCollectingUI(false);
     updateStageUI();
     enableSecondary(state.stage1Rows.length > 0);
@@ -980,6 +1186,16 @@ async function init() {
   $("#datasetName").textContent = DATASET;
   $("#stageSizeLabel").textContent = `${formatN(STAGE_SIZE)}명`;
   $("#totalCapLabel").textContent = `${formatN(TOTAL_CAP)}명`;
+  const tokenInput = $("#token");
+  if (tokenInput) {
+    tokenInput.setAttribute("autocomplete", "off");
+    tokenInput.setAttribute("autocapitalize", "off");
+    tokenInput.setAttribute("spellcheck", "false");
+    tokenInput.oninput = () => {
+      requestRuntime.adaptiveGapMs = baseRequestGap();
+      requestRuntime.consecutiveSuccesses = 0;
+    };
+  }
   try {
     await loadMeta();
   } catch (e) {

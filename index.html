@@ -1,0 +1,1569 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<title>Nemotron Persona Collector</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+:root{
+  --navy:#0f172a; --navy-2:#1e3a8a; --blue:#2563eb; --blue-soft:#eff6ff;
+  --s900:#0f172a; --s800:#1e293b; --s700:#334155; --s600:#475569; --s500:#5b6b80;
+  --s400:#7c8ca1; --s300:#cbd5e1; --s200:#e2e8f0; --s100:#f1f5f9; --s50:#f8fafc;
+  --white:#fff; --danger:#b42318; --danger-bg:#fff1f0; --success:#047857; --success-bg:#ecfdf5;
+  --warn:#8a4b09; --warn-bg:#fffbeb;
+  --frame:430px; --ease:cubic-bezier(.22,1,.36,1);
+}
+*{box-sizing:border-box} html{background:var(--s50)}
+body{margin:0;min-height:100vh;min-height:100dvh;background:var(--s50);color:var(--s900);
+  font:17px/1.62 Pretendard,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  -webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent;overscroll-behavior-y:none}
+button,input,textarea,select{font:inherit}
+button{border:0;cursor:pointer;background:none;color:inherit}
+button:disabled{cursor:not-allowed;opacity:.45}
+a{color:inherit}[hidden]{display:none!important}
+.app-frame{position:relative;width:min(100%,var(--frame));min-height:100vh;min-height:100dvh;margin:auto;overflow:hidden;background:var(--white);box-shadow:0 25px 55px #0f172a24}
+.screen{min-height:100vh;min-height:100dvh}
+.fade-in{animation:fade-in .34s var(--ease) both}
+@keyframes fade-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}.spinner{animation:spin 1s linear infinite!important}}
+
+/* ── 헤더 ── */
+.app-header{position:sticky;top:0;z-index:20;display:grid;grid-template-columns:48px 1fr 98px;align-items:center;min-height:86px;padding:max(12px,env(safe-area-inset-top)) 14px 10px;color:#fff;background:#0f172afa;backdrop-filter:blur(16px)}
+.header-actions{display:flex;gap:4px;justify-content:flex-end}
+.icon-button{display:grid;place-items:center;width:46px;height:46px;padding:0;border-radius:14px;color:var(--s500)}
+.header-button{color:#fff;background:#ffffff1a}
+.header-button:disabled{opacity:.3}
+.icon-button svg{width:23px;height:23px}
+.header-title{min-width:0;text-align:center}
+.header-title strong{display:block;overflow:hidden;font-size:19px;font-weight:800;text-overflow:ellipsis;white-space:nowrap}
+.header-title small{display:block;margin-bottom:2px;color:#9dc7fd;font-size:16px;font-weight:800;letter-spacing:.02em}
+.step-area{padding:22px 16px 0;background:#fff}
+.step-meta{display:flex;justify-content:space-between;color:var(--blue);font-size:16px;font-weight:850;letter-spacing:.04em}
+.step-area h1{margin:9px 0 18px;font-size:31px;font-weight:900;line-height:1.18;letter-spacing:-.035em}
+.progress-track{height:5px;overflow:hidden;border-radius:999px;background:var(--s100)}
+.progress-track i{display:block;height:100%;border-radius:inherit;background:var(--blue);transition:width .35s var(--ease)}
+
+/* ── 인트로 ── */
+.api-screen{display:flex;flex-direction:column;justify-content:center;padding:46px 32px calc(42px + env(safe-area-inset-bottom));text-align:center;background:#fff}
+.hero-icon{display:grid;place-items:center;width:96px;height:96px;margin:0 auto 32px;border-radius:50%;color:#fff;background:var(--blue);box-shadow:0 10px 32px #2563eb61}
+.hero-icon svg{width:48px;height:48px;stroke-width:2.2}
+.hero-title{margin:0;color:var(--s900);font-size:clamp(42px,12vw,52px);font-weight:900;font-style:italic;line-height:1.08;letter-spacing:-.055em}
+.hero-subtitle{margin:22px 0 38px;color:var(--s500);font-size:17px;font-weight:600;line-height:1.75}
+
+/* ── 카드 · 본문 ── */
+.content{padding:20px 16px 150px;background:#fff}
+.content.no-bottom{padding-bottom:44px}
+.card{margin:0 0 18px;padding:21px 19px;border:1px solid var(--s100);border-radius:24px;background:#fff;box-shadow:0 8px 24px #0f172a0d}
+.card-dark{color:#fff;background:var(--navy);border-color:var(--navy);box-shadow:0 18px 40px #0f172a33}
+.eyebrow{margin-bottom:10px;color:var(--blue);font-size:16px;font-weight:900;letter-spacing:.1em;text-transform:uppercase}
+.card-dark .eyebrow{color:#7db4fb}
+.display-title{margin:0 0 13px;font-size:28px;font-weight:900;line-height:1.25;letter-spacing:-.035em}
+.body-copy{margin:0;color:var(--s600);font-size:17px;font-weight:520;line-height:1.7}
+.card-dark .body-copy{color:#d6dfeb}
+.section-heading{margin:28px 0 10px;font-size:23px;font-weight:900;letter-spacing:-.025em}
+.sub-heading{display:block;margin:24px 0 11px;color:var(--blue);font-size:19px;font-weight:900;letter-spacing:-.02em}
+.helper{margin:12px 2px 0;color:var(--s500);font-size:16px;line-height:1.65}
+
+/* ── 버튼 ── */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:58px;padding:15px 20px;border-radius:18px;font-size:18px;font-weight:800;line-height:1.3;text-decoration:none;transition:.15s}
+.btn:active:not(:disabled){transform:scale(.98)}
+.btn svg{width:22px;height:22px}
+.btn-full{width:100%}
+.btn-primary{color:#fff;background:var(--navy-2);box-shadow:0 8px 22px #1e3a8a2e}
+.btn-primary:hover:not(:disabled){background:#1d4ed8}
+.btn-dark{color:#fff;background:var(--navy);box-shadow:0 10px 28px #0f172a29}
+.btn-outline{color:var(--s900);background:#fff;border:2px solid var(--s200)}
+.btn-outline:hover:not(:disabled){border-color:var(--s300);background:var(--s50)}
+.btn-small{min-height:50px;padding:11px 15px;border-radius:15px;font-size:17px}
+.bottom-bar{position:fixed;z-index:30;bottom:0;left:50%;width:min(100%,var(--frame));padding:14px 16px calc(14px + env(safe-area-inset-bottom));transform:translateX(-50%);border-top:1px solid var(--s100);background:#fffffff2;backdrop-filter:blur(16px)}
+.bottom-stack{display:grid;gap:9px}
+.btn-row{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+
+/* ── 메시지 ── */
+.message{margin:0 0 18px;padding:15px 16px;border-radius:15px;text-align:left;font-size:16px;font-weight:620;line-height:1.65}
+.message-error{color:var(--danger);background:var(--danger-bg);border:1px solid #ffd5d2}
+.message-success{color:var(--success);background:var(--success-bg);border:1px solid #bbf7d0}
+.message-info{color:#1a4bc4;background:var(--blue-soft);border:1px solid #dbeafe}
+.message-warn{color:var(--warn);background:var(--warn-bg);border:1px solid #fde68a}
+
+/* ── 선택 카드 ── */
+.country-list,.size-list{display:grid;gap:12px}
+.country-card{display:grid;grid-template-columns:52px 1fr 28px;align-items:center;gap:14px;width:100%;padding:17px 18px;border:2px solid var(--s100);border-radius:22px;text-align:left;background:#fff;transition:.16s}
+.country-card:hover{border-color:var(--s300)}
+.country-card.selected{border-color:var(--blue);background:var(--blue-soft);box-shadow:0 8px 22px #2563eb1c}
+.country-flag{font-size:36px;line-height:1;text-align:center}
+.country-card h3{margin:0 0 4px;font-size:21px;font-weight:900;letter-spacing:-.02em}
+.country-card p{margin:0;color:var(--s500);font-size:16px;font-weight:600;word-break:break-all}
+.check-dot{display:grid;place-items:center;width:28px;height:28px;border:2px solid var(--s300);border-radius:50%;color:#fff}
+.selected .check-dot{border-color:var(--blue);background:var(--blue)}
+.check-dot svg{width:16px;height:16px;stroke-width:3.2}
+.size-card{display:grid;grid-template-columns:1fr 28px;align-items:center;gap:14px;width:100%;padding:17px 18px;border:2px solid var(--s100);border-radius:22px;text-align:left;background:#fff;transition:.16s}
+.size-card:hover{border-color:var(--s300)}
+.size-card.selected{border-color:var(--blue);background:var(--blue-soft);box-shadow:0 8px 22px #2563eb1c}
+.size-card b{display:block;font-size:22px;font-weight:900;letter-spacing:-.02em}
+.size-card em{display:block;margin-top:6px;color:var(--s600);font-size:17px;font-weight:700;font-style:normal;line-height:1.5}
+.size-card.selected em{color:#1a4bc4}
+.size-card .warn-tag{display:inline-block;margin-top:8px;padding:4px 11px;border-radius:999px;color:var(--warn);background:var(--warn-bg);font-size:16px;font-weight:800}
+
+/* ── 요약 숫자 ── */
+.facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:18px}
+.fact{min-width:0;padding:13px 8px;border-radius:15px;text-align:center;background:var(--blue-soft)}
+.fact small{display:block;color:var(--s600);font-size:16px;font-weight:750}
+.fact strong{display:block;margin-top:5px;overflow:hidden;color:var(--navy);font-size:18px;font-weight:900;letter-spacing:-.03em;text-overflow:ellipsis;white-space:nowrap}
+.card-dark .fact small{color:var(--s600)}
+.card-dark .fact strong{color:var(--navy)}
+
+/* ── 조건 행 ── */
+.filter-list{display:grid;gap:10px}
+.filter-row{display:grid;grid-template-columns:1fr auto 22px;align-items:center;gap:10px;width:100%;padding:17px 17px;border:1.5px solid var(--s200);border-radius:20px;background:#fff;text-align:left;transition:.15s}
+.filter-row:hover{border-color:var(--s300);background:var(--s50)}
+.filter-row.active{border-color:var(--blue);background:var(--blue-soft)}
+.fr-label{min-width:0;font-size:18px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fr-value{max-width:150px;overflow:hidden;color:var(--s500);font-size:17px;font-weight:700;text-align:right;text-overflow:ellipsis;white-space:nowrap}
+.filter-row.active .fr-value{color:var(--blue)}
+.filter-row svg{width:20px;height:20px;color:var(--s400)}
+details.more{margin-top:12px}
+details.more summary{cursor:pointer;padding:13px 4px;color:var(--blue);font-size:17px;font-weight:800;list-style:none}
+details.more summary::-webkit-details-marker{display:none}
+details.more summary:before{content:"＋ "}
+details.more[open] summary:before{content:"－ "}
+
+/* ── 칩 · 스위치 ── */
+.chip-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:13px}
+.chip-btn{padding:12px 17px;border:1.5px solid var(--s200);border-radius:999px;color:var(--s700);background:#fff;font-size:17px;font-weight:800;transition:.15s}
+.chip-btn.on{color:#fff;background:var(--blue);border-color:var(--blue);box-shadow:0 6px 16px #2563eb33}
+.switch-row{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:18px;padding:15px 16px;border-radius:18px;background:var(--s50)}
+.switch-row span{font-size:17px;font-weight:750}
+.switch-row em{display:block;margin-top:4px;color:var(--s500);font-size:16px;font-weight:600;font-style:normal;line-height:1.55}
+.switch{position:relative;flex:0 0 56px;width:56px;height:33px;border-radius:999px;background:var(--s300);transition:.18s}
+.switch:after{content:"";position:absolute;top:3px;left:3px;width:27px;height:27px;border-radius:50%;background:#fff;box-shadow:0 2px 6px #0f172a2e;transition:.18s var(--ease)}
+.switch.on{background:var(--blue)}
+.switch.on:after{transform:translateX(23px)}
+
+/* ── 입력 ── */
+.text-input,.text-area{width:100%;padding:15px 16px;border:1.5px solid var(--s200);border-radius:18px;color:var(--s900);background:var(--s50);font-size:17px;font-weight:560;outline:0;transition:.18s}
+.text-area{min-height:106px;resize:vertical;line-height:1.65}
+.text-input:focus,.text-area:focus{border-color:var(--blue);background:#fff;box-shadow:0 0 0 4px #2563eb1c}
+.text-input::placeholder,.text-area::placeholder{color:var(--s400)}
+.example-box{margin-top:13px;padding:16px;border:1px solid #dbeafe;border-radius:18px;background:var(--blue-soft)}
+.example-box b{display:block;margin-bottom:11px;color:var(--blue);font-size:16px;font-weight:900;letter-spacing:.06em}
+.example-box p{margin:12px 0 0;color:var(--s600);font-size:16px;line-height:1.6}
+.example-chips{display:flex;flex-wrap:wrap;gap:7px}
+.example-chip{padding:9px 14px;border:1px solid #c7ddfc;border-radius:999px;color:#1a4bc4;background:#fff;font-size:17px;font-weight:750;transition:.14s}
+.example-chip:hover{background:#dbeafe;border-color:var(--blue)}
+.example-chip:active{transform:scale(.96)}
+.range-row{display:grid;grid-template-columns:1fr 24px 1fr;align-items:center;gap:10px;margin-top:16px}
+.range-row span{text-align:center;color:var(--s500);font-size:18px;font-weight:800}
+.match-line{margin:16px 0 0;padding:15px 16px;border-radius:16px;background:var(--blue-soft);border:1px solid #dbeafe;color:var(--s700);font-size:17px;font-weight:750;text-align:center;line-height:1.6}
+.match-line b{color:#1a4bc4;font-size:19px;font-weight:900}
+
+/* ── 로딩 ── */
+.loading-card{padding:34px 20px;text-align:center}
+.spinner{display:block;width:62px;height:62px;margin:0 auto 26px;border:6px solid var(--s100);border-top-color:var(--blue);border-right-color:#60a5fa;border-radius:50%;animation:spin .85s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.work-progress{position:relative;height:8px;margin:24px 0 12px;overflow:hidden;border-radius:999px;background:var(--s100)}
+.work-progress i{display:block;height:100%;border-radius:inherit;background:var(--blue);transition:width .35s var(--ease)}
+.work-progress:after{content:"";position:absolute;inset:0;transform:translateX(-100%);background:linear-gradient(90deg,transparent,#ffffffb8,transparent);animation:sweep 1.4s infinite}
+@keyframes sweep{to{transform:translateX(100%)}}
+.progress-caption{display:flex;justify-content:space-between;color:var(--s600);font-size:16px;font-weight:750}
+
+/* ── 페르소나 카드 ── */
+.persona-list{display:grid;gap:12px;max-width:100%}
+.persona-card{width:100%;max-width:100%;padding:19px;border:1.5px solid var(--s100);border-radius:22px;text-align:left;background:#fff;transition:.15s;overflow:hidden;overflow-wrap:anywhere;word-break:break-word}
+.persona-card:hover{border-color:var(--s300);background:var(--s50)}
+.persona-card h3{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin:0 0 4px;font-size:22px;font-weight:900;line-height:1.3;letter-spacing:-.025em}
+.persona-card h3 span{min-width:0;flex:1 1 auto;overflow-wrap:anywhere;word-break:break-word}
+.persona-card h3 i{flex:0 0 auto;color:var(--s300);margin-top:3px}
+.persona-card h3 svg{width:20px;height:20px}
+.persona-role{margin:0 0 11px;color:var(--blue);font-size:17px;font-weight:800;line-height:1.45}
+.persona-meta{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:11px}
+.status-chip{display:inline-flex;align-items:center;max-width:100%;min-height:30px;padding:4px 11px;border-radius:999px;color:#1a4bc4;background:#dbeafe;font-size:16px;font-weight:800;overflow-wrap:anywhere;word-break:break-word}
+.persona-summary{margin:0;color:var(--s600);font-size:17px;font-weight:520;line-height:1.7;overflow-wrap:anywhere;word-break:break-word}
+.list-more{margin-top:14px}
+
+/* ── 바텀시트 ── */
+.modal-backdrop{position:fixed;z-index:100;inset:0;display:flex;align-items:flex-end;justify-content:center;padding-top:40px;background:#0f172a9e}
+.modal-sheet{display:flex;flex-direction:column;width:min(100%,var(--frame));max-height:88vh;padding:0 16px calc(20px + env(safe-area-inset-bottom));border-radius:30px 30px 0 0;background:#fff;animation:sheet-up .3s var(--ease) both}
+@keyframes sheet-up{from{transform:translateY(30px);opacity:.65}}
+.modal-head{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px 0 14px;border-bottom:1px solid var(--s100)}
+.modal-head h2{margin:0;font-size:22px;font-weight:900;letter-spacing:-.02em}
+.modal-head .icon-button{background:var(--s100);color:var(--s700)}
+.modal-body{flex:1;overflow:auto;padding:14px 0}
+.modal-foot{display:grid;grid-template-columns:1fr 1fr;gap:9px;padding-top:12px;border-top:1px solid var(--s100)}
+.opt-line{display:flex;align-items:center;gap:12px;width:100%;padding:14px 12px;border-radius:15px;text-align:left;font-size:18px;font-weight:650;transition:.12s}
+.opt-line:hover{background:var(--s50)}
+.opt-line.on{background:var(--blue-soft);color:#1a4bc4;font-weight:800}
+.opt-text{min-width:0;flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.opt-count{flex:0 0 auto;color:var(--s500);font-size:16px;font-weight:800}
+.opt-line.on .opt-count{color:#1a4bc4}
+.opt-mark{display:grid;place-items:center;flex:0 0 28px;width:28px;height:28px;border:2px solid var(--s300);border-radius:50%;background:#fff;color:#fff}
+.opt-line.on .opt-mark{border-color:var(--blue);background:var(--blue)}
+.opt-mark svg{width:16px;height:16px;stroke-width:3.4}
+.raw-field{margin-top:10px;padding:14px 15px;border-radius:15px;background:var(--s50)}
+.raw-field b{display:block;margin-bottom:5px;color:var(--blue);font-size:16px;font-weight:900;letter-spacing:.02em}
+.raw-field span{display:block;color:var(--s700);font-size:17px;line-height:1.7;word-break:break-word;white-space:pre-line}
+
+.toast{position:fixed;z-index:200;top:calc(18px + env(safe-area-inset-top));left:50%;width:min(calc(100% - 32px),398px);padding:15px 17px;transform:translateX(-50%);border-radius:15px;color:#fff;background:var(--s900);box-shadow:0 15px 35px #0f172a40;font-size:17px;font-weight:750;text-align:center;animation:toast-in .25s var(--ease) both}
+@keyframes toast-in{from{opacity:0;transform:translate(-50%,-10px)}}
+.foot-note{margin:28px 2px 0;color:var(--s500);font-size:16px;line-height:1.75;text-align:center}
+.foot-note a{color:var(--blue);font-weight:700}
+@media(max-width:380px){
+  .content,.step-area,.bottom-bar{padding-left:13px;padding-right:13px}
+  .card{padding:18px 15px}.hero-title{font-size:40px}
+  .fact small{font-size:16px}.fact strong{font-size:17px}
+}
+</style>
+</head>
+<body>
+<div id="app" class="app-frame" aria-live="polite"></div>
+<div id="modal" hidden></div>
+<div id="toast" class="toast" role="status" hidden></div>
+<noscript>이 프로그램을 사용하려면 브라우저의 JavaScript를 켜 주세요.</noscript>
+
+<script>
+(() => {
+'use strict';
+
+/* ===================================================================
+ * Nemotron Persona Collector — 모바일 단일 파일
+ * 1차: 조건 없이 /rows 로만 수집 → 2차: 모은 데이터 안에서 조건 + 키워드
+ * AI API 키가 필요 없다.
+ * =================================================================== */
+
+const COUNTRIES = [
+  { id:'kr', name:'대한민국', en:'Korea',  flag:'🇰🇷', dataset:'nvidia/Nemotron-Personas-Korea' },
+  { id:'us', name:'미국',     en:'USA',    flag:'🇺🇸', dataset:'nvidia/Nemotron-Personas-USA' },
+  { id:'jp', name:'일본',     en:'Japan',  flag:'🇯🇵', dataset:'nvidia/Nemotron-Personas-Japan' },
+  { id:'fr', name:'프랑스',   en:'France', flag:'🇫🇷', dataset:'nvidia/Nemotron-Personas-France' },
+  { id:'br', name:'브라질',   en:'Brazil', flag:'🇧🇷', dataset:'nvidia/Nemotron-Personas-Brazil' },
+  { id:'in', name:'인도',     en:'India',  flag:'🇮🇳', dataset:'nvidia/Nemotron-Personas-India' },
+];
+
+const API = 'https://datasets-server.huggingface.co';
+const PAGE = 100;
+const TARGET_OPTIONS = [1000, 3000, 5000, 10000, 50000];
+const HEAVY_FROM = 10000;
+const HARD_CAP = 200000;
+const CAT_MAX = 200;
+const LONG_TEXT_LEN = 90;
+const FIELD_SCAN_ROWS = 30000;
+const PREVIEW_STEP = 20;
+const DEFAULT_ROW_BYTES = 5200;
+
+const REQUEST_GAP_MS = 1100;
+const REQUEST_GAP_MAX_MS = 8000;
+const RATE_LIMIT_FALLBACK_MS = 25000;
+const RATE_LIMIT_MAX_SLEEP_MS = 4 * 60 * 1000;
+const NETWORK_RETRY_BASE_MS = 4000;
+const SERVER_RETRY_BASE_MS = 5000;
+const SINGLE_REQUEST_MAX_WAIT_MS = 8 * 60 * 1000;
+
+const FALLBACK_COLUMNS = ['uuid','sex','age','occupation','education_level','persona','professional_persona'];
+
+const LABELS = {
+  uuid:'고유ID', id:'ID', person_id:'인물 ID',
+  sex:'성별', gender:'성별', age:'나이', birth_year:'출생연도', age_group:'연령대',
+  marital_status:'혼인상태', relationship_status:'관계상태', military_status:'병역상태',
+  education_level:'학력', education:'학력', highest_education:'최종학력',
+  bachelors_field:'전공계열', field_of_study:'전공', major:'전공',
+  occupation:'직업', job:'직업', employment_status:'고용상태', industry:'산업', work_status:'근로형태',
+  family_type:'가족형태', household_type:'가구형태', housing_type:'주거형태', household_size:'가구원수',
+  income:'소득', income_level:'소득수준', income_bracket:'소득구간',
+  country:'국가', region:'지역', area:'권역', province:'시도/주', state:'주/지역', district:'구/군',
+  city:'도시', municipality:'시군구', commune:'코뮌', department:'데파르트망', prefecture:'현/도도부현',
+  sigungu:'시군구', sido:'시도', county:'카운티', locality:'거주지', urbanization:'도시화 정도',
+  zipcode:'우편번호', postal_code:'우편번호',
+  religion:'종교', language:'언어', mother_tongue:'모국어', ethnicity:'민족', race:'인종',
+  persona:'페르소나 요약', professional_persona:'직업 페르소나', sports_persona:'스포츠 페르소나',
+  arts_persona:'예술 페르소나', travel_persona:'여행 페르소나', culinary_persona:'요리 페르소나',
+  family_persona:'가족 페르소나', cultural_background:'문화적 배경',
+  skills_and_expertise:'기술 및 전문성', hobbies_and_interests:'취미 및 관심사',
+  career_goals_and_ambitions:'경력 목표', personality_traits:'성격 특성',
+};
+
+const DEMOGRAPHIC_PRIORITY = ['sex','gender','age','age_group','marital_status','military_status',
+  'education_level','education','bachelors_field','field_of_study','occupation','job',
+  'employment_status','industry','family_type','household_type','housing_type','income_level',
+  'religion','language','urbanization','country','region','area','state','province','prefecture',
+  'department','district','city','municipality','commune'];
+
+const PREFERRED_ORDER = ['uuid','id','person_id','sex','gender','age','age_group','marital_status',
+  'military_status','family_type','household_type','housing_type','education_level','education',
+  'bachelors_field','field_of_study','occupation','job','employment_status','industry','income_level',
+  'religion','language','country','region','area','state','province','prefecture','department','district',
+  'city','municipality','commune','zipcode','postal_code',
+  'persona','professional_persona','family_persona','cultural_background','skills_and_expertise',
+  'hobbies_and_interests','career_goals_and_ambitions','personality_traits',
+  'sports_persona','arts_persona','travel_persona','culinary_persona'];
+
+const INTERNAL_COL_RE = /^(row_idx|__index_level_0__|index)$/i;
+const ID_COL_RE = /^(uuid|id|person_id)$/i;
+const LOCATION_COL_RE = /(country|region|province|state|district|city|municipality|commune|county|locality|ward|neighborhood|zipcode|postal|sido|sigungu|department|prefecture)/i;
+const TEXT_FOCUS_RE = /(occupation|job|industry|persona|background|skills|expertise|hobbies|interests|goals|ambitions|career|field|education|traits|family|culture|arts|travel|culinary|sports)/i;
+const LIST_DUP_RE = /_list$/i;
+
+const CJK_RE = /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]/;
+const HANGUL_RE = /[\uac00-\ud7af]/;
+const NAME_PARTICLES = new Set(['de','da','do','dos','das','del','della','van','von','der','le','la','du','di','bin','al','e','y']);
+
+const KEYWORD_EXAMPLES_KO = ['디자인', '사용자 조사', '인터뷰', '브랜드', '창업', '육아', '여행', '요리', '사진', '운동'];
+const KEYWORD_EXAMPLES_EN = ['design', 'research', 'interview', 'marketing', 'startup', 'teacher', 'travel', 'cooking', 'photography', 'fitness'];
+const keywordExamples = () => (state.country?.id === 'kr' ? KEYWORD_EXAMPLES_KO : KEYWORD_EXAMPLES_EN);
+
+const VALUE_TRANSLATIONS = new Map(Object.entries({
+  male:'남성', m:'남성', man:'남성', female:'여성', f:'여성', woman:'여성',
+  single:'미혼', unmarried:'미혼', married:'기혼', divorced:'이혼', widowed:'사별', separated:'별거',
+  apartment:'아파트', house:'단독주택', studio:'원룸', owned:'자가', rented:'임대',
+  completed:'완료', exempt:'면제', 'not applicable':'해당 없음',
+  yes:'예', no:'아니오', true:'예', false:'아니오', none:'없음', unknown:'알 수 없음',
+}));
+
+// ---- 상태 -----------------------------------------------------------
+const state = {
+  screen: 'intro',        // intro | country | meta | size | collecting | result
+  country: null,
+  config: 'default', split: 'train',
+  total: null, avgRowBytes: DEFAULT_ROW_BYTES,
+  allColumns: [...FALLBACK_COLUMNS],
+  target: 1000, randomStart: false,
+  nextOffset: null,
+  rows: [], finalRows: [],
+  filterFields: [], category: {}, ranges: {},
+  include: '', matchMode: 'any', filterApplied: false, keywordApplied: false,
+  previewLimit: PREVIEW_STEP,
+  busy: false, progress: 0, progressText: '', progressSub: '',
+  controller: null, cancelRequested: false,
+  error: '', notice: '', noticeType: 'info',
+};
+
+const requestRuntime = { nextRequestAt: 0, gapMs: REQUEST_GAP_MS, hits: 0, wins: 0, lastOkAt: 0, kind: 'pacing' };
+const searchTextCache = new WeakMap();
+const nameCache = new WeakMap();
+
+// ---- 유틸 -----------------------------------------------------------
+const $ = (sel, root = document) => root.querySelector(sel);
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const formatN = v => Number(v || 0).toLocaleString('ko-KR');
+const humanize = c => String(c || '').replace(/_/g, ' ').replace(/\b\w/g, m => m.toUpperCase());
+const fieldLabel = c => LABELS[c] || humanize(c);
+const prettyText = v => String(v ?? '').replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
+const renderIcons = () => requestAnimationFrame(() => window.lucide?.createIcons?.());
+
+function toast(message) {
+  const node = $('#toast');
+  node.textContent = message;
+  node.hidden = false;
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => { node.hidden = true; }, 2600);
+}
+function normalizeKey(v) { return String(v ?? '').normalize('NFKC').trim().toLowerCase().replace(/\s+/g, ' '); }
+function displayValue(col, raw) {
+  const s = String(raw ?? '');
+  if (!s) return '빈 값';
+  if (LOCATION_COL_RE.test(col)) return s;
+  return VALUE_TRANSLATIONS.get(normalizeKey(s)) || s;
+}
+function normText(v) {
+  return String(v ?? '').normalize('NFKC').toLowerCase()
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .replace(/[_\-/,.;:()\[\]{}"'“”‘’·]+/g, ' ')
+    .replace(/\s+/g, ' ').trim();
+}
+function cellText(v) {
+  if (v == null) return '';
+  if (Array.isArray(v)) return v.map(cellText).filter(Boolean).join(', ');
+  if (typeof v === 'object') { try { return JSON.stringify(v); } catch { return String(v); } }
+  return String(v);
+}
+function formatBytes(bytes) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '—';
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))}KB`;
+  const mb = bytes / (1024 * 1024);
+  if (mb < 1024) return `${mb < 10 ? mb.toFixed(1) : Math.round(mb)}MB`;
+  return `${(mb / 1024).toFixed(1)}GB`;
+}
+function formatDuration(seconds) {
+  const s = Math.max(1, Math.round(seconds));
+  if (s < 60) return `약 ${s}초`;
+  const m = Math.round(s / 60);
+  if (m < 60) return `약 ${m}분`;
+  return `약 ${Math.floor(m / 60)}시간 ${m % 60}분`;
+}
+function estimateFor(count) {
+  const capped = state.total != null ? Math.min(count, state.total) : count;
+  const bytes = capped * state.avgRowBytes;
+  const requests = Math.ceil(capped / PAGE);
+  const seconds = requests * (REQUEST_GAP_MS / 1000 + 0.35);
+  return { capped, bytes, seconds };
+}
+
+// ---- 네트워크 -------------------------------------------------------
+function checkCancelled() { if (state.cancelRequested) throw new Error('CANCELLED'); }
+function abortableSleep(ms) {
+  checkCancelled();
+  const signal = state.controller?.signal;
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(new Error('CANCELLED'));
+    const timer = setTimeout(() => { signal?.removeEventListener('abort', onAbort); resolve(); }, Math.max(0, ms));
+    function onAbort() { clearTimeout(timer); reject(new Error('CANCELLED')); }
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+async function waitWithCountdown(ms, info, onWait) {
+  let remaining = Math.max(0, Math.round(ms));
+  while (remaining > 0) {
+    checkCancelled();
+    onWait?.({ ...info, waitSec: Math.ceil(remaining / 1000) });
+    const part = Math.min(1000, remaining);
+    await abortableSleep(part);
+    remaining -= part;
+  }
+}
+function safeHeader(res, name) { try { return res?.headers?.get(name) || ''; } catch { return ''; } }
+function parseSecondsOrDate(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  if (/^\d+(?:\.\d+)?$/.test(raw)) return Math.max(0, Number(raw) * 1000);
+  const at = Date.parse(raw);
+  return Number.isFinite(at) ? Math.max(0, at - Date.now()) : null;
+}
+function retryAfterMs(res) {
+  const direct = parseSecondsOrDate(safeHeader(res, 'retry-after'));
+  if (direct != null) return direct;
+  for (const name of ['ratelimit-reset', 'x-ratelimit-reset']) {
+    const raw = safeHeader(res, name);
+    if (!raw) continue;
+    const n = Number(raw);
+    if (!Number.isFinite(n)) continue;
+    return n > 1000000000 ? Math.max(0, n * 1000 - Date.now()) : Math.max(0, n * 1000);
+  }
+  const rl = safeHeader(res, 'ratelimit');
+  const match = rl.match(/(?:^|[;,]\s*)t\s*=\s*"?(\d+)"?/i) || rl.match(/(?:^|[;,]\s*)reset\s*=\s*"?(\d+)"?/i);
+  return match ? Number(match[1]) * 1000 : null;
+}
+function classifyHttp(status, body) {
+  const b = (body || '').toLowerCase();
+  if (status === 429) return 'rate_limit';
+  if (status === 404) return 'notfound';
+  if (status === 401 || status === 403) return 'auth';
+  if (b.includes('loading') || b.includes('index') || b.includes('try again')) return 'warming';
+  if (status >= 500) return 'server';
+  return 'fatal';
+}
+function retryDelay(kind, attempt, res) {
+  if (kind === 'rate_limit' || kind === 'rate_limit_or_network') {
+    const announced = retryAfterMs(res);
+    if (announced != null) return Math.min(Math.max(announced + 1000, 5000), RATE_LIMIT_MAX_SLEEP_MS);
+    return Math.min(RATE_LIMIT_FALLBACK_MS * Math.pow(2, Math.min(requestRuntime.hits, 3)), RATE_LIMIT_MAX_SLEEP_MS);
+  }
+  if (kind === 'warming') return Math.min(5000 + attempt * 2500, 30000);
+  if (kind === 'server') return Math.min(SERVER_RETRY_BASE_MS * Math.pow(2, Math.min(attempt - 1, 4)), 60000);
+  return Math.min(NETWORK_RETRY_BASE_MS * Math.pow(2, Math.min(attempt - 1, 5)), 120000);
+}
+function noteSuccess() {
+  requestRuntime.wins++;
+  requestRuntime.lastOkAt = Date.now();
+  if (requestRuntime.wins >= 12) {
+    requestRuntime.gapMs = Math.max(REQUEST_GAP_MS, Math.round(requestRuntime.gapMs * 0.9));
+    requestRuntime.hits = Math.max(0, requestRuntime.hits - 1);
+    requestRuntime.wins = 0;
+  }
+  requestRuntime.kind = 'pacing';
+  requestRuntime.nextRequestAt = Date.now() + requestRuntime.gapMs;
+}
+function noteRateLimit(waitMs, kind) {
+  requestRuntime.hits++;
+  requestRuntime.wins = 0;
+  requestRuntime.gapMs = Math.min(REQUEST_GAP_MAX_MS, Math.max(REQUEST_GAP_MS * 2, Math.round(requestRuntime.gapMs * 1.7)));
+  requestRuntime.kind = kind;
+  requestRuntime.nextRequestAt = Date.now() + waitMs;
+}
+async function waitForSlot(onWait) {
+  const remaining = requestRuntime.nextRequestAt - Date.now();
+  if (remaining <= 0) return;
+  if (remaining > 1500 && requestRuntime.kind !== 'pacing') {
+    await waitWithCountdown(remaining, { kind: requestRuntime.kind, attempt: 0 }, onWait);
+  } else {
+    await abortableSleep(remaining);
+  }
+}
+async function fetchJson(url, { maxWaitMs = SINGLE_REQUEST_MAX_WAIT_MS, onWait = null } = {}) {
+  const start = Date.now();
+  let attempt = 0, lastKind = 'network';
+  while (true) {
+    checkCancelled();
+    attempt++;
+    await waitForSlot(onWait);
+    let status = 0, body = '', netErr = null, res = null;
+    try {
+      res = await fetch(url, { mode: 'cors', credentials: 'omit', referrerPolicy: 'no-referrer', signal: state.controller?.signal });
+      status = res.status;
+      if (res.ok) { const data = await res.json(); noteSuccess(); return data; }
+      body = await res.text().catch(() => '');
+    } catch (e) {
+      if (e?.name === 'AbortError' || state.cancelRequested) throw new Error('CANCELLED');
+      netErr = e;
+    }
+    const recentOk = Date.now() - requestRuntime.lastOkAt < 30000;
+    const masked = netErr && recentOk && /fetch|network|load/i.test(String(netErr.message || netErr));
+    const kind = netErr ? (masked ? 'rate_limit_or_network' : 'network') : classifyHttp(status, body);
+    lastKind = kind;
+    if (kind === 'notfound') throw new Error('해당 국가의 데이터셋을 찾을 수 없습니다. 잠시 후 다시 시도해 주세요.');
+    if (kind === 'auth') throw new Error('이 데이터셋은 현재 공개 접근이 제한되어 있습니다.');
+    if (kind === 'fatal') throw new Error(`요청 실패 (HTTP ${status}) ${(body || '').slice(0, 160)}`);
+
+    const elapsed = Date.now() - start;
+    if (elapsed >= maxWaitMs) {
+      if (lastKind === 'rate_limit' || lastKind === 'rate_limit_or_network') {
+        throw new Error('Hugging Face 요청 제한이 계속되고 있습니다. 지금까지 받은 데이터는 그대로 보관했습니다. 잠시 후 이어서 모아 주세요.');
+      }
+      if (lastKind === 'warming') throw new Error('데이터 준비가 예상보다 오래 걸립니다. 잠시 후 다시 시도해 주세요.');
+      throw new Error(netErr ? ('네트워크 오류: ' + netErr.message) : `요청 실패 (HTTP ${status})`);
+    }
+    let waitMs = Math.min(retryDelay(kind, attempt, res), Math.max(1000, maxWaitMs - elapsed));
+    if (kind === 'rate_limit' || kind === 'rate_limit_or_network') noteRateLimit(waitMs, kind);
+    else { requestRuntime.kind = kind; requestRuntime.nextRequestAt = Date.now() + waitMs; }
+    await waitWithCountdown(waitMs, { kind, status, attempt }, onWait);
+  }
+}
+function waitMessage(info) {
+  const sec = Math.max(1, Number(info?.waitSec) || 1);
+  if (info?.kind === 'rate_limit' || info?.kind === 'rate_limit_or_network') return `요청 제한을 감지했습니다 · ${sec}초 후 자동으로 이어서 진행합니다`;
+  if (info?.kind === 'warming') return `데이터를 준비하고 있습니다 · ${sec}초 후 자동 재확인합니다`;
+  if (info?.kind === 'server') return `서버가 잠시 응답하지 않습니다 · ${sec}초 후 자동 재시도합니다`;
+  return `일시적인 네트워크 오류입니다 · ${sec}초 후 자동 재시도합니다`;
+}
+
+// ---- 데이터 접근 -----------------------------------------------------
+function buildUrl(offset, length) {
+  return `${API}/rows?dataset=${encodeURIComponent(state.country.dataset)}&config=${encodeURIComponent(state.config)}` +
+    `&split=${encodeURIComponent(state.split)}&offset=${offset}&length=${length}`;
+}
+const mapRows = rows => (rows || []).map(r => (r && r.row ? r.row : r));
+const rowKey = row => row?.uuid || row?.id || row?.person_id || JSON.stringify(row);
+
+function orderColumns(cols) {
+  const clean = (cols || []).filter(c => c && !INTERNAL_COL_RE.test(c) && !LIST_DUP_RE.test(c));
+  const first = PREFERRED_ORDER.filter(c => clean.includes(c));
+  const ordered = [...first, ...clean.filter(c => !first.includes(c))];
+  return ordered.length ? ordered : [...FALLBACK_COLUMNS];
+}
+function byteLength(text) {
+  try { return new TextEncoder().encode(text).length; } catch { return Math.round(text.length * 1.6); }
+}
+async function resolveConfigSplit(dataset) {
+  try {
+    const s = await fetchJson(`${API}/splits?dataset=${encodeURIComponent(dataset)}`, {
+      maxWaitMs: 90000,
+      onWait: info => { state.progressSub = waitMessage(info); paintProgress(); },
+    });
+    const arr = s.splits || [];
+    if (arr.length) { const t = arr.find(x => x.split === 'train') || arr[0]; return { config: t.config, split: t.split }; }
+  } catch (e) { if (String(e.message) === 'CANCELLED') throw e; }
+  return { config: 'default', split: 'train' };
+}
+async function loadMeta(country) {
+  state.progressText = `${country.name} 데이터를 연결하는 중`;
+  state.progressSub = '데이터셋 구성을 확인하고 있습니다.';
+  const { config, split } = await resolveConfigSplit(country.dataset);
+  state.config = config; state.split = split;
+  state.progressSub = '표본을 읽어 크기를 재고 있습니다.';
+  paintProgress();
+  const data = await fetchJson(buildUrl(0, 5), {
+    maxWaitMs: 3 * 60 * 1000,
+    onWait: info => { state.progressSub = waitMessage(info); paintProgress(); },
+  });
+  state.total = data.num_rows_total ?? null;
+  const featureNames = (data.features || []).map(f => f.name).filter(Boolean);
+  const sample = mapRows(data.rows);
+  state.allColumns = orderColumns(featureNames.length ? featureNames : Object.keys(sample[0] || {}));
+  state.avgRowBytes = sample.length
+    ? Math.max(500, Math.round(byteLength(JSON.stringify(sample)) / sample.length))
+    : DEFAULT_ROW_BYTES;
+}
+
+// ---- 수집 -----------------------------------------------------------
+function paintProgress() {
+  if (state.screen !== 'collecting' && state.screen !== 'meta') return;
+  const title = $('#progressTitle'), sub = $('#progressSub'), bar = $('#progressBar'), pct = $('#progressPct'), cnt = $('#progressCount');
+  if (title) title.textContent = state.progressText;
+  if (sub) sub.textContent = state.progressSub;
+  if (bar) bar.style.width = `${Math.min(100, state.progress)}%`;
+  if (pct) pct.textContent = `${Math.round(Math.min(100, state.progress))}%`;
+  if (cnt) cnt.textContent = state.rows.length ? `${formatN(state.rows.length)}명 보관` : '';
+}
+async function startCollect(append = false) {
+  if (!append) { state.rows = []; state.finalRows = []; state.nextOffset = null; state.filterApplied = false; state.keywordApplied = false; }
+  const goal = Math.min(HARD_CAP, state.rows.length + state.target);
+  state.cancelRequested = false;
+  state.controller = new AbortController();
+  state.busy = true;
+  state.error = ''; state.notice = '';
+  state.progress = state.rows.length / goal * 100;
+  state.progressText = append ? '이어서 모으는 중' : '페르소나를 모으는 중';
+  state.progressSub = '조건 없이 전체에서 순서대로 가져옵니다.';
+  state.screen = 'collecting';
+  render();
+
+  const onWait = info => { state.progressSub = waitMessage(info); paintProgress(); };
+  const startedWith = state.rows.length;
+  let interrupted = false;
+
+  try {
+    let offset = state.nextOffset;
+    if (offset == null) {
+      offset = 0;
+      if (state.randomStart && state.total && state.total > goal) {
+        offset = Math.floor(Math.random() * (state.total - goal));
+      }
+    }
+    const seen = new Set(state.rows.map(rowKey));
+    while (state.rows.length < goal) {
+      checkCancelled();
+      let need = Math.min(PAGE, goal - state.rows.length);
+      if (state.total != null) need = Math.min(need, Math.max(0, state.total - offset));
+      if (need <= 0) break;
+      const data = await fetchJson(buildUrl(offset, need), { maxWaitMs: SINGLE_REQUEST_MAX_WAIT_MS, onWait });
+      if (data.num_rows_total != null) state.total = data.num_rows_total;
+      const got = mapRows(data.rows);
+      for (const row of got) {
+        const key = rowKey(row);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        state.rows.push(row);
+      }
+      offset += got.length;
+      state.nextOffset = offset;
+      state.progress = state.rows.length / goal * 100;
+      state.progressSub = `전체 ${state.total != null ? formatN(state.total) : '?'}명 중 ${formatN(offset)}번째까지 확인했습니다.`;
+      paintProgress();
+      if (!got.length || got.length < need) break;
+    }
+  } catch (e) {
+    interrupted = true;
+    if (String(e.message) === 'CANCELLED') {
+      state.notice = state.rows.length ? `중지했습니다. 지금까지 받은 ${formatN(state.rows.length)}명은 그대로 보관했습니다.` : '수집을 중지했습니다.';
+      state.noticeType = 'info';
+    } else {
+      state.error = e.message || String(e);
+    }
+  } finally {
+    state.busy = false;
+    state.controller = null;
+    state.cancelRequested = false;
+  }
+  if (!interrupted && state.rows.length === startedWith && startedWith > 0) {
+    state.notice = '데이터셋 끝까지 모두 모았습니다. 더 가져올 사람이 없습니다.';
+    state.noticeType = 'info';
+  }
+  finishCollect(interrupted);
+}
+function finishCollect(interrupted = false) {
+  state.filterFields = buildFieldsFromRows(state.rows);
+  pruneConditions();
+  state.finalRows = filterRows();
+  state.previewLimit = PREVIEW_STEP;
+  if (!state.rows.length) { state.screen = 'size'; render(); return; }
+  state.screen = 'result';
+  if (!interrupted && !state.notice) {
+    state.notice = `${formatN(state.rows.length)}명을 모았습니다. 아래에서 프로필과 키워드로 좁혀 보세요.`;
+    state.noticeType = 'success';
+  }
+  render();
+}
+function cancelCollect() {
+  if (!state.busy) return;
+  state.cancelRequested = true;
+  state.progressSub = '중지하는 중입니다…';
+  paintProgress();
+  state.controller?.abort();
+}
+
+// ---- 수집 데이터에서 조건 항목 만들기 --------------------------------
+function buildFieldsFromRows(rows) {
+  if (!rows.length) return [];
+  const scan = rows.length > FIELD_SCAN_ROWS ? rows.slice(0, FIELD_SCAN_ROWS) : rows;
+  const cols = state.allColumns.filter(c => !ID_COL_RE.test(c) && !INTERNAL_COL_RE.test(c) && !LIST_DUP_RE.test(c));
+  const fields = [];
+  for (const col of cols) {
+    const counts = new Map();
+    let filled = 0, numericCount = 0, longText = false, tooMany = false;
+    let min = Infinity, max = -Infinity;
+    for (const row of scan) {
+      const raw = row[col];
+      if (raw == null || raw === '') continue;
+      const s = cellText(raw);
+      if (!s) continue;
+      filled++;
+      if (s.length > LONG_TEXT_LEN) { longText = true; break; }
+      if (!tooMany) {
+        counts.set(s, (counts.get(s) || 0) + 1);
+        if (counts.size > CAT_MAX) tooMany = true;
+      }
+      if (typeof raw === 'number' || /^-?\d+(?:\.\d+)?$/.test(s)) {
+        numericCount++;
+        const n = Number(s);
+        if (n < min) min = n;
+        if (n > max) max = n;
+      }
+    }
+    if (longText || !filled) continue;
+    const isNumeric = numericCount === filled && Number.isFinite(min) && Number.isFinite(max)
+      && max > min && !/zip|postal|code/i.test(col);
+    if (isNumeric) { fields.push({ col, control: 'range', bounds: { min, max } }); continue; }
+    if (!tooMany && counts.size > 1) {
+      const entries = [...counts.entries()].sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(String(b[0]), 'ko'));
+      fields.push({ col, control: 'category', options: entries.map(e => e[0]), counts: new Map(entries) });
+    }
+  }
+  fields.sort((a, b) => {
+    const ai = DEMOGRAPHIC_PRIORITY.indexOf(a.col), bi = DEMOGRAPHIC_PRIORITY.indexOf(b.col);
+    const ap = ai < 0 ? 999 : ai, bp = bi < 0 ? 999 : bi;
+    if (ap !== bp) return ap - bp;
+    return state.allColumns.indexOf(a.col) - state.allColumns.indexOf(b.col);
+  });
+  return fields;
+}
+function pruneConditions() {
+  const valid = new Set(state.filterFields.map(f => f.col));
+  for (const col of Object.keys(state.category)) if (!valid.has(col)) delete state.category[col];
+  for (const col of Object.keys(state.ranges)) if (!valid.has(col)) delete state.ranges[col];
+}
+function activeConditionCount() {
+  let n = 0;
+  for (const vals of Object.values(state.category)) if ((vals || []).length) n++;
+  for (const r of Object.values(state.ranges)) if (r && !r.any) n++;
+  return n;
+}
+function conditionSummary(field) {
+  if (field.control === 'range') {
+    const r = state.ranges[field.col];
+    if (!r || r.any) return '상관 없음';
+    return `${formatN(r.min)} ~ ${formatN(r.max)}`;
+  }
+  const sel = state.category[field.col] || [];
+  if (!sel.length) return '상관 없음';
+  if (sel.length === 1) return prettyText(displayValue(field.col, sel[0]));
+  return `${prettyText(displayValue(field.col, sel[0]))} 외 ${sel.length - 1}`;
+}
+function resetConditions() { state.category = {}; state.ranges = {}; }
+
+// ---- 조건 + 키워드 결합 ------------------------------------------------
+function parseKeywords(text) {
+  return String(text || '').split(/[\n,;|/]+/g).map(s => s.trim()).filter(Boolean)
+    .filter((v, i, arr) => arr.findIndex(x => normText(x) === normText(v)) === i);
+}
+function textColumns() {
+  const cols = state.allColumns.filter(c => TEXT_FOCUS_RE.test(c));
+  return cols.length ? cols : state.allColumns.filter(c => !ID_COL_RE.test(c));
+}
+function cachedSearchText(row, cols, key) {
+  const entry = searchTextCache.get(row);
+  if (entry && entry.key === key) return entry.text;
+  const text = normText(cols.map(c => cellText(row[c])).join(' \n '));
+  searchTextCache.set(row, { key, text });
+  return text;
+}
+function keywordHits(text, keywords) {
+  let count = 0;
+  for (const q of keywords) {
+    if (!q) continue;
+    if (text.includes(q)) { count++; continue; }
+    const tokens = q.split(' ').filter(Boolean);
+    if (tokens.length > 1 && tokens.every(t => text.includes(t))) count++;
+  }
+  return count;
+}
+function conditionMatchers() {
+  const cats = [];
+  for (const [col, vals] of Object.entries(state.category)) {
+    if ((vals || []).length) cats.push([col, new Set(vals)]);
+  }
+  const rngs = [];
+  for (const [col, r] of Object.entries(state.ranges)) {
+    if (r && !r.any) rngs.push([col, Number(r.min), Number(r.max)]);
+  }
+  return { cats, rngs };
+}
+function matchesConditions(row, cats, rngs) {
+  for (const [col, set] of cats) if (!set.has(cellText(row[col]))) return false;
+  for (const [col, min, max] of rngs) {
+    const n = Number(cellText(row[col]));
+    if (!Number.isFinite(n) || n < min || n > max) return false;
+  }
+  return true;
+}
+function conditionOnlyRows() {
+  const { cats, rngs } = conditionMatchers();
+  if (!cats.length && !rngs.length) return state.rows;
+  return state.rows.filter(row => matchesConditions(row, cats, rngs));
+}
+function filterRows() {
+  const base = conditionOnlyRows();
+  const keywords = parseKeywords(state.include).map(normText).filter(Boolean);
+  if (!keywords.length) return [...base];
+  const cols = textColumns();
+  const key = cols.join('|');
+  return base.filter(row => {
+    const hits = keywordHits(cachedSearchText(row, cols, key), keywords);
+    return state.matchMode === 'all' ? hits >= keywords.length : hits >= 1;
+  });
+}
+function applyFilters() {
+  if (!state.rows.length) return;
+  state.finalRows = filterRows();
+  state.keywordApplied = parseKeywords(state.include).length > 0;
+  state.filterApplied = activeConditionCount() > 0 || state.keywordApplied;
+  state.previewLimit = PREVIEW_STEP;
+  state.notice = state.filterApplied
+    ? `모은 ${formatN(state.rows.length)}명 중 ${formatN(state.finalRows.length)}명을 찾았습니다.`
+    : '조건을 넣지 않아 모은 전체를 그대로 보여 줍니다.';
+  state.noticeType = state.finalRows.length ? 'success' : 'warn';
+  render();
+}
+function resetFilters() {
+  resetConditions();
+  state.include = ''; state.matchMode = 'any';
+  state.finalRows = [...state.rows];
+  state.filterApplied = false; state.keywordApplied = false;
+  state.previewLimit = PREVIEW_STEP;
+  state.notice = '조건을 모두 초기화했습니다.';
+  state.noticeType = 'info';
+  render();
+}
+
+// ---- 페르소나 이름 / 표시 --------------------------------------------
+function pickField(row, candidates) {
+  for (const c of candidates) { const v = cellText(row[c]).trim(); if (v) return v; }
+  return '';
+}
+function latinName(text) {
+  const words = text.split(' ');
+  const out = [];
+  for (let i = 0; i < Math.min(words.length, 5); i++) {
+    const w = words[i].replace(/[,;:.!?]+$/, '');
+    if (!w) break;
+    if (/^[A-ZÀ-ÞŁØ]/.test(w)) { out.push(w); continue; }
+    if (out.length && NAME_PARTICLES.has(w.toLowerCase()) && /^[A-ZÀ-ÞŁØ]/.test(words[i + 1] || '')) { out.push(w); continue; }
+    break;
+  }
+  return out.length >= 2 ? out.join(' ') : '';
+}
+function personaName(row) {
+  const cached = nameCache.get(row);
+  if (cached !== undefined) return cached;
+  const raw = pickField(row, ['persona', 'professional_persona', 'family_persona', 'cultural_background']);
+  let name = '';
+  if (raw) {
+    const head = raw.replace(/\s+/g, ' ').trim().slice(0, 120);
+    if (HANGUL_RE.test(head.slice(0, 22))) {
+      const m = head.match(/^([가-힣]{2,5})\s*(?:씨|님)?\s*(?:은|는|이|가|의)(?=[\s,.、]|$)/)
+        || head.match(/^([가-힣]{2,5})\s*(?:씨|님)(?=[\s,.、]|$)/)
+        || head.match(/^([가-힣]{2,5})(?=[,、])/);
+      if (m) name = m[1].replace(/([가-힣]{2,})[씨님]$/, '$1');
+    }
+    if (!name && CJK_RE.test(head.slice(0, 20))) {
+      const m = head.match(/^([^\s、。,.]{1,12}(?:\s[^\s、。,.]{1,12})?)\s*(?:は|さんは|が)/);
+      if (m) name = m[1].trim();
+    }
+    if (!name) name = latinName(head);
+  }
+  nameCache.set(row, name);
+  return name;
+}
+function personaTitle(row) {
+  return personaName(row) || prettyText(pickField(row, ['occupation', 'job', 'employment_status', 'industry'])) || '이름 없음';
+}
+function personaRole(row) {
+  const job = prettyText(pickField(row, ['occupation', 'job', 'employment_status', 'industry']));
+  return personaName(row) ? job : '';
+}
+function personaChips(row) {
+  const chips = [];
+  const sex = pickField(row, ['sex', 'gender']);
+  if (sex) chips.push(prettyText(displayValue('sex', sex)));
+  const age = pickField(row, ['age', 'age_group']);
+  if (age) chips.push(/^\d+$/.test(age) ? `${age}세` : prettyText(age));
+  const place = pickField(row, ['province', 'state', 'prefecture', 'region', 'department', 'district', 'city', 'municipality', 'commune']);
+  if (place) chips.push(prettyText(place));
+  const edu = pickField(row, ['education_level', 'education']);
+  if (edu) chips.push(prettyText(displayValue('education_level', edu)));
+  return chips.slice(0, 4);
+}
+function personaSummary(row) {
+  const raw = pickField(row, ['persona', 'professional_persona', 'cultural_background', 'career_goals_and_ambitions', 'skills_and_expertise']);
+  const text = raw.replace(/\s+/g, ' ').trim();
+  return text.length > 170 ? text.slice(0, 170) + '…' : text;
+}
+function rowColumns(sample) {
+  const keys = Object.keys(sample || {}).filter(k => !INTERNAL_COL_RE.test(k));
+  const first = PREFERRED_ORDER.filter(c => keys.includes(c));
+  return [...first, ...keys.filter(c => !first.includes(c))];
+}
+
+// ---- 엑셀 / 작업 저장 -------------------------------------------------
+function conditionTextSummary() {
+  const parts = [];
+  for (const f of state.filterFields) {
+    const s = conditionSummary(f);
+    if (s !== '상관 없음') parts.push(`${fieldLabel(f.col)}: ${s}`);
+  }
+  return parts.length ? parts.join(' / ') : '없음';
+}
+function saveExcel(rows, kind) {
+  if (!rows || !rows.length) { toast('저장할 데이터가 없습니다.'); return; }
+  if (typeof XLSX === 'undefined') { toast('엑셀 라이브러리를 불러오지 못했습니다.'); return; }
+  const cols = rowColumns(rows[0]);
+  const aoa = [['이름', ...cols.map(fieldLabel)]];
+  rows.forEach(r => aoa.push([personaName(r), ...cols.map(c => (r[c] == null ? '' : cellText(r[c])))]));
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [{ wch: 18 }, ...cols.map(c => ({ wch: Math.min(Math.max(fieldLabel(c).length + 8, 12), 48) }))];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'personas');
+  const isRaw = kind === 'raw';
+  const meta = [
+    ['항목', '값'],
+    ['저장 종류', isRaw ? '1차 수집 전체 (조건 없음)' : '최종 결과 (프로필 + 키워드)'],
+    ['국가', state.country.name],
+    ['데이터셋', state.country.dataset],
+    ['config / split', `${state.config} / ${state.split}`],
+    ['1차 수집 인원', state.rows.length],
+    ['저장 인원', rows.length],
+    ['기본 프로필 선택', isRaw ? '해당 없음' : conditionTextSummary()],
+    ['페르소나 특성 키워드', isRaw ? '해당 없음' : (state.include || '없음')],
+    ['키워드 방식', isRaw ? '해당 없음' : (state.matchMode === 'all' ? '모두 포함' : '하나라도 포함')],
+    ['생성 시각', new Date().toLocaleString('ko-KR')],
+  ];
+  const metaWs = XLSX.utils.aoa_to_sheet(meta);
+  metaWs['!cols'] = [{ wch: 20 }, { wch: 60 }];
+  XLSX.utils.book_append_sheet(wb, metaWs, 'meta');
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+  XLSX.writeFile(wb, `Nemotron_${state.country.en}_${isRaw ? '1차전체' : '최종'}_${rows.length}_${stamp}.xlsx`);
+  toast(isRaw ? '1차 수집 전체를 저장했습니다.' : '최종 결과를 저장했습니다.');
+}
+function saveProject() {
+  const project = {
+    app: 'nemotron-persona-collector', version: 3, savedAt: new Date().toISOString(),
+    country: state.country.id, dataset: state.country.dataset, config: state.config, split: state.split,
+    total: state.total, avgRowBytes: state.avgRowBytes, nextOffset: state.nextOffset,
+    target: state.target, randomStart: state.randomStart,
+    category: state.category,
+    ranges: Object.fromEntries(Object.entries(state.ranges).map(([k, v]) => [k, { any: v.any, min: v.min, max: v.max }])),
+    include: state.include, matchMode: state.matchMode,
+    allColumns: state.allColumns, rows: state.rows,
+  };
+  const blob = new Blob([JSON.stringify(project)], { type: 'application/json;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `Nemotron_${state.country.en}_작업_${state.rows.length}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+  toast('작업 파일을 저장했습니다.');
+}
+function openProjectFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(String(reader.result || '{}'));
+      const country = COUNTRIES.find(c => c.id === data.country) || COUNTRIES.find(c => c.dataset === data.dataset);
+      if (!country) throw new Error('country');
+      state.country = country;
+      state.config = data.config || 'default';
+      state.split = data.split || 'train';
+      state.total = data.total ?? null;
+      state.avgRowBytes = Number(data.avgRowBytes) || DEFAULT_ROW_BYTES;
+      state.nextOffset = data.nextOffset ?? null;
+      state.target = TARGET_OPTIONS.includes(Number(data.target)) ? Number(data.target) : 1000;
+      state.randomStart = Boolean(data.randomStart);
+      state.include = data.include || '';
+      state.matchMode = data.matchMode || 'any';
+      state.category = data.category && typeof data.category === 'object' ? data.category : {};
+      state.ranges = data.ranges && typeof data.ranges === 'object' ? data.ranges : {};
+      if (Array.isArray(data.allColumns) && data.allColumns.length) state.allColumns = data.allColumns;
+      state.rows = Array.isArray(data.rows) ? data.rows : [];
+      state.filterFields = buildFieldsFromRows(state.rows);
+      pruneConditions();
+      state.finalRows = filterRows();
+      state.keywordApplied = parseKeywords(state.include).length > 0;
+      state.filterApplied = activeConditionCount() > 0 || state.keywordApplied;
+      state.previewLimit = PREVIEW_STEP;
+      state.error = '';
+      state.notice = `저장된 작업을 열었습니다 — ${country.name} · ${formatN(state.rows.length)}명`;
+      state.noticeType = 'success';
+      state.screen = state.rows.length ? 'result' : 'size';
+      render();
+    } catch {
+      toast('작업 파일을 열 수 없습니다.');
+    }
+  };
+  reader.readAsText(file, 'utf-8');
+}
+
+// ---- 화면 공통 --------------------------------------------------------
+const STEP_TITLES = { country: '국가 선택', size: '수집 인원', collecting: '후보 수집', result: '조건 검색' };
+const STEP_NO = { country: 1, size: 2, collecting: 3, result: 4 };
+const FLOW = ['intro', 'country', 'size', 'result'];
+
+function screenAvailable(screen) {
+  if (screen === 'intro' || screen === 'country') return true;
+  if (screen === 'size') return !!state.country;
+  if (screen === 'result') return state.rows.length > 0;
+  return false;
+}
+function prevScreen() {
+  const i = FLOW.indexOf(state.screen);
+  if (i <= 0) return null;
+  for (let k = i - 1; k >= 0; k--) if (screenAvailable(FLOW[k])) return FLOW[k];
+  return null;
+}
+function nextScreen() {
+  const i = FLOW.indexOf(state.screen);
+  if (i < 0) return null;
+  for (let k = i + 1; k < FLOW.length; k++) if (screenAvailable(FLOW[k])) return FLOW[k];
+  return null;
+}
+
+function headerTemplate(screen) {
+  const step = STEP_NO[screen] || 1;
+  const title = STEP_TITLES[screen] || '';
+  const transient = screen === 'meta' || screen === 'collecting';
+  const backTo = transient ? null : prevScreen();
+  const forwardTo = transient ? null : nextScreen();
+  const backOff = state.busy || !backTo;
+  const fwdOff = state.busy || !forwardTo;
+  return `<header class="app-header">
+    <button class="icon-button header-button" id="backButton" aria-label="이전 화면" ${backOff ? 'disabled' : ''}><i data-lucide="chevron-left"></i></button>
+    <div class="header-title"><small>Persona Collector</small><strong>${esc(state.country ? state.country.flag + ' ' + state.country.name : 'Nemotron')}</strong></div>
+    <div class="header-actions">
+      <button class="icon-button header-button" id="forwardButton" aria-label="다음 화면" ${fwdOff ? 'disabled' : ''}><i data-lucide="chevron-right"></i></button>
+      <button class="icon-button header-button" id="homeButton" aria-label="처음으로" ${state.busy ? 'disabled' : ''}><i data-lucide="rotate-ccw"></i></button>
+    </div>
+  </header>
+  <section class="step-area">
+    <div class="step-meta"><span>Step ${step}</span><span>${step} / 4</span></div>
+    <h1>${esc(title)}</h1>
+    <div class="progress-track"><i style="width:${step / 4 * 100}%"></i></div>
+  </section>`;
+}
+const screenShell = (screen, content, bottom = '') =>
+  `<div class="screen fade-in">${headerTemplate(screen)}<main class="content ${bottom ? '' : 'no-bottom'}">${content}</main>` +
+  (bottom ? `<div class="bottom-bar"><div class="bottom-stack">${bottom}</div></div>` : '') + '</div>';
+
+function noticeBlock() {
+  let html = '';
+  if (state.error) html += `<div class="message message-error">${esc(state.error)}</div>`;
+  if (state.notice) html += `<div class="message message-${state.noticeType}">${esc(state.notice)}</div>`;
+  return html;
+}
+
+// ---- 화면: 인트로 -----------------------------------------------------
+function renderIntro(app) {
+  app.innerHTML = `<div class="screen api-screen fade-in">
+    <div class="hero-icon"><i data-lucide="users-round"></i></div>
+    <h1 class="hero-title">Persona<br>Collector</h1>
+    <p class="hero-subtitle">6개 국가 NVIDIA Nemotron-Personas 데이터를<br>먼저 모은 다음, 프로필과 키워드로 골라 냅니다.<br><b>API 키가 필요 없습니다.</b></p>
+    <button class="btn btn-primary btn-full" id="startButton">시작하기 <i data-lucide="arrow-right"></i></button>
+    <button class="btn btn-outline btn-full" id="openButton" style="margin-top:10px"><i data-lucide="folder-open"></i> 저장한 작업 열기</button>
+    <input id="projectInput" type="file" accept="application/json,.json" hidden>
+    <p class="foot-note">데이터 출처 · NVIDIA Nemotron-Personas (CC BY 4.0)<br>통계 기반 합성 데이터이며 실제 개인정보가 아닙니다.</p>
+  </div>`;
+  $('#startButton').onclick = () => { state.screen = 'country'; render(); };
+  $('#openButton').onclick = () => $('#projectInput').click();
+  $('#projectInput').onchange = e => openProjectFile(e.target.files?.[0]);
+}
+
+// ---- 화면: 국가 선택 --------------------------------------------------
+function renderCountry(app) {
+  const cards = COUNTRIES.map(c => `
+    <button class="country-card ${state.country?.id === c.id ? 'selected' : ''}" data-country="${c.id}">
+      <span class="country-flag">${c.flag}</span>
+      <span><h3>${esc(c.name)}</h3><p>${esc(c.dataset.replace('nvidia/', ''))}</p></span>
+      <span class="check-dot"><i data-lucide="check"></i></span>
+    </button>`).join('');
+  const content = `${noticeBlock()}
+    <div class="card card-dark">
+      <div class="eyebrow">Step 1</div>
+      <h2 class="display-title">어느 나라 사람을 찾을까요?</h2>
+      <p class="body-copy">국가를 고르면 그 나라 데이터에 연결하고, 1인당 데이터 크기를 재서 다음 화면에 보여 줍니다.</p>
+    </div>
+    <div class="country-list">${cards}</div>
+    <p class="foot-note">각 데이터셋은 Hugging Face에 공개되어 있으며 별도 로그인 없이 사용합니다.</p>`;
+  app.innerHTML = screenShell('country', content);
+  app.querySelectorAll('[data-country]').forEach(btn => {
+    btn.onclick = () => selectCountry(COUNTRIES.find(c => c.id === btn.dataset.country));
+  });
+}
+async function selectCountry(country) {
+  if (!country) return;
+  state.country = country;
+  resetConditions();
+  state.rows = []; state.finalRows = []; state.filterFields = [];
+  state.nextOffset = null; state.filterApplied = false; state.keywordApplied = false;
+  state.include = ''; state.matchMode = 'any';
+  state.error = ''; state.notice = '';
+  state.allColumns = [...FALLBACK_COLUMNS]; state.total = null; state.avgRowBytes = DEFAULT_ROW_BYTES;
+  state.cancelRequested = false;
+  state.controller = new AbortController();
+  state.busy = true;
+  state.screen = 'meta';
+  render();
+  try {
+    await loadMeta(country);
+    state.screen = 'size';
+    state.notice = `${country.name} 데이터에 연결했습니다 — 전체 ${state.total != null ? formatN(state.total) + '명' : '규모 확인 중'}.`;
+    state.noticeType = 'success';
+  } catch (e) {
+    state.screen = 'country';
+    if (String(e.message) !== 'CANCELLED') state.error = `${country.name} 데이터를 불러오지 못했습니다. ${e.message || e}`;
+  } finally {
+    state.busy = false;
+    state.controller = null;
+    render();
+  }
+}
+
+// ---- 화면: 연결 로딩 --------------------------------------------------
+function renderMeta(app) {
+  app.innerHTML = `<div class="screen fade-in">${headerTemplate('country')}
+    <main class="content">
+      <section class="card loading-card">
+        <div class="spinner"></div>
+        <div class="eyebrow">Connecting</div>
+        <h2 class="display-title" id="progressTitle">${esc(state.progressText || '데이터를 연결하는 중')}</h2>
+        <p class="body-copy" id="progressSub">${esc(state.progressSub || '')}</p>
+      </section>
+    </main>
+    <div class="bottom-bar"><div class="bottom-stack">
+      <button class="btn btn-outline btn-full" id="cancelButton"><i data-lucide="x"></i> 중지</button>
+    </div></div></div>`;
+  $('#cancelButton').onclick = () => { state.cancelRequested = true; state.controller?.abort(); };
+}
+
+// ---- 화면: 수집 인원 선택 ---------------------------------------------
+function renderSize(app) {
+  const cards = TARGET_OPTIONS.map(n => {
+    const { capped, bytes, seconds } = estimateFor(n);
+    const heavy = n >= HEAVY_FROM;
+    const short = capped < n;
+    return `<button class="size-card ${state.target === n ? 'selected' : ''}" data-target="${n}">
+      <span>
+        <b>${formatN(n)}명</b>
+        <em>예상 크기 ${formatBytes(bytes)} · 예상 시간 ${formatDuration(seconds)}</em>
+        ${short ? `<span class="warn-tag">전체가 ${formatN(state.total)}명이라 이만큼만 모입니다</span>` : ''}
+        ${heavy ? '<span class="warn-tag">시간이 오래 걸립니다</span>' : ''}
+      </span>
+      <span class="check-dot"><i data-lucide="check"></i></span>
+    </button>`;
+  }).join('');
+
+  const content = `${noticeBlock()}
+    <div class="card card-dark">
+      <div class="eyebrow">Step 2</div>
+      <h2 class="display-title">먼저 몇 명을 모을까요?</h2>
+      <p class="body-copy">1차 수집은 <b>조건 없이</b> 데이터셋에서 순서대로 가져옵니다. 성별·나이·직업 같은 조건과 키워드는 다 모은 뒤 다음 화면에서 함께 적용합니다.</p>
+      <div class="facts">
+        <div class="fact"><small>전체 규모</small><strong>${state.total != null ? formatN(state.total) : '—'}</strong></div>
+        <div class="fact"><small>1인당 크기</small><strong>${formatBytes(state.avgRowBytes)}</strong></div>
+        <div class="fact"><small>선택</small><strong>${formatN(state.target)}명</strong></div>
+      </div>
+    </div>
+
+    <div class="message message-info">수집이 끝난 뒤에도 결과 화면에서 <b>같은 방식으로 계속 더 모을 수 있습니다.</b> 한 번에 무리하지 말고 나눠서 모으는 편이 안전합니다.</div>
+
+    <div class="size-list">${cards}</div>
+
+    <div class="message message-warn" style="margin-top:18px">Hugging Face 공개 API는 한 번에 100명씩만 주고 요청 간격도 필요해서, 인원이 늘수록 시간이 크게 늘어납니다. 1만 명 이상은 <b>수 분에서 십수 분</b>이 걸리고, 휴대폰에서는 화면이 꺼지면 중단될 수 있습니다. 5만 명은 메모리 부담이 커서 데스크톱 브라우저를 권합니다.</div>
+
+    <div class="switch-row">
+      <span>무작위 구간에서 모으기<em>매번 다른 사람이 나옵니다. 끄면 항상 처음부터 모읍니다.</em></span>
+      <button class="switch ${state.randomStart ? 'on' : ''}" id="randomToggle" role="switch" aria-checked="${state.randomStart}" aria-label="무작위 구간에서 모으기"></button>
+    </div>
+    <p class="helper">예상 크기는 실제 표본 5명을 읽어 계산한 값이라 실제와 거의 같습니다. 예상 시간은 네트워크 상태와 요청 제한에 따라 더 길어질 수 있습니다.</p>`;
+
+  const est = estimateFor(state.target);
+  const bottom = `<button class="btn btn-primary btn-full" id="collectButton"><i data-lucide="download"></i> ${formatN(est.capped)}명 모으기 · ${formatBytes(est.bytes)}</button>`;
+
+  app.innerHTML = screenShell('size', content, bottom);
+  app.querySelectorAll('[data-target]').forEach(btn => {
+    btn.onclick = () => { state.target = Number(btn.dataset.target); render(); };
+  });
+  $('#randomToggle').onclick = () => { state.randomStart = !state.randomStart; render(); };
+  $('#collectButton').onclick = () => startCollect(false);
+}
+
+// ---- 화면: 수집 진행 --------------------------------------------------
+function renderCollecting(app) {
+  const content = `<section class="card loading-card">
+      <div class="spinner"></div>
+      <div class="eyebrow">Collecting</div>
+      <h2 class="display-title" id="progressTitle">${esc(state.progressText)}</h2>
+      <p class="body-copy" id="progressSub">${esc(state.progressSub)}</p>
+      <div class="work-progress"><i id="progressBar" style="width:${Math.min(100, state.progress)}%"></i></div>
+      <div class="progress-caption"><span id="progressPct">${Math.round(Math.min(100, state.progress))}%</span><span id="progressCount">${state.rows.length ? formatN(state.rows.length) + '명 보관' : ''}</span></div>
+    </section>
+    <div class="card">
+      <div class="eyebrow">안내</div>
+      <p class="body-copy">화면을 켜 둔 채로 기다려 주세요. 요청이 잠시 막히면 자동으로 기다렸다가 이어서 모읍니다. 중지해도 그때까지 받은 사람은 그대로 남고, 결과 화면에서 이어서 더 모을 수 있습니다.</p>
+    </div>`;
+  app.innerHTML = screenShell('collecting', content, '<button class="btn btn-outline btn-full" id="cancelButton"><i data-lucide="x"></i> 중지</button>');
+  $('#cancelButton').onclick = cancelCollect;
+}
+
+// ---- 화면: 결과 / 조건 검색 -------------------------------------------
+function filterRowHtml(field) {
+  const summary = conditionSummary(field);
+  const active = summary !== '상관 없음';
+  return `<button class="filter-row ${active ? 'active' : ''}" data-field="${esc(field.col)}">
+    <span class="fr-label">${esc(fieldLabel(field.col))}</span>
+    <span class="fr-value">${esc(summary)}</span>
+    <i data-lucide="chevron-right"></i>
+  </button>`;
+}
+function renderResult(app) {
+  const rows = state.finalRows;
+  const shown = rows.slice(0, state.previewLimit);
+  const cards = shown.map((row, i) => {
+    const role = personaRole(row);
+    return `<button class="persona-card" data-row="${i}">
+      <h3><span>${esc(personaTitle(row))}</span><i data-lucide="chevron-right"></i></h3>
+      ${role ? `<p class="persona-role">${esc(role)}</p>` : ''}
+      <div class="persona-meta">${personaChips(row).map(c => `<span class="status-chip">${esc(c)}</span>`).join('')}</div>
+      <p class="persona-summary">${esc(personaSummary(row) || '요약 정보가 없습니다. 눌러서 원본 데이터를 확인하세요.')}</p>
+    </button>`;
+  }).join('');
+
+  const primary = state.filterFields.filter(f => DEMOGRAPHIC_PRIORITY.includes(f.col));
+  const mainList = (primary.length ? primary : state.filterFields).slice(0, 10);
+  const restList = state.filterFields.filter(f => !mainList.includes(f));
+  const conditions = state.filterFields.length
+    ? `<div class="filter-list">${mainList.map(filterRowHtml).join('')}</div>
+       ${restList.length ? `<details class="more"><summary>다른 조건 ${restList.length}개 더 보기</summary>
+         <div class="filter-list" style="margin-top:10px">${restList.map(filterRowHtml).join('')}</div></details>` : ''}`
+    : '<p class="body-copy">프로필로 쓸 수 있는 항목이 없습니다. 키워드로 찾아 보세요.</p>';
+
+  const condCount = conditionOnlyRows().length;
+  const keywordLine = state.keywordApplied
+    ? `페르소나 특성 키워드에 적합한 <b>${formatN(rows.length)}명</b>을 찾았습니다`
+    : `키워드를 넣지 않아 기본 프로필 선택으로 찾은 <b>${formatN(rows.length)}명</b>을 모두 보여 줍니다`;
+
+  const content = `${noticeBlock()}
+    <div class="card card-dark">
+      <div class="eyebrow">Result</div>
+      <h2 class="display-title">${formatN(rows.length)}명</h2>
+      <p class="body-copy">${esc(state.country.name)} · 1차 수집 ${formatN(state.rows.length)}명 중 ${state.filterApplied ? '조건에 맞는 사람' : '전체'}입니다.</p>
+    </div>
+
+    <h2 class="section-heading">조건에 맞는 페르소나 찾기</h2>
+    <p class="body-copy">모아 둔 ${formatN(state.rows.length)}명 안에서 찾습니다. 인터넷 연결 없이 즉시 걸러집니다.</p>
+
+    <h3 class="sub-heading">기본 프로필 선택</h3>
+    ${conditions}
+    <div class="match-line">기본 프로필 선택으로 <b>${formatN(condCount)}명</b>을 찾았습니다</div>
+
+    <label class="sub-heading" for="includeInput">페르소나 특성 키워드 입력</label>
+    <textarea class="text-area" id="includeInput" placeholder="예: 디자인, 사용자 조사, 인터뷰, 브랜드 전략">${esc(state.include)}</textarea>
+    <div class="example-box">
+      <b>이렇게 넣어 보세요</b>
+      <div class="example-chips">${keywordExamples().map(k => `<button class="example-chip" data-example="${esc(k)}">${esc(k)}</button>`).join('')}</div>
+      <p>눌러서 추가할 수 있습니다. 쉼표나 줄바꿈으로 여러 개를 넣으세요.</p>
+    </div>
+    <div class="chip-row">
+      <button class="chip-btn ${state.matchMode === 'any' ? 'on' : ''}" data-mode="any">하나라도 포함</button>
+      <button class="chip-btn ${state.matchMode === 'all' ? 'on' : ''}" data-mode="all">모두 포함</button>
+    </div>
+    <div class="btn-row" style="margin-top:16px">
+      <button class="btn btn-dark btn-small" id="applyFilterButton"><i data-lucide="search"></i> 적용</button>
+      <button class="btn btn-outline btn-small" id="resetFilterButton">초기화</button>
+    </div>
+
+    <h2 class="section-heading">미리보기</h2>
+    <div class="match-line">${keywordLine}</div>
+    <p class="helper">카드를 누르면 원본 데이터 전체를 볼 수 있습니다.</p>
+    <div class="persona-list" style="margin-top:16px">${cards || '<p class="body-copy">조건에 맞는 사람이 없습니다. 조건을 줄이거나 1차 수집을 더 늘려 보세요.</p>'}</div>
+    ${rows.length > state.previewLimit ? `<button class="btn btn-outline btn-full btn-small list-more" id="moreButton">${formatN(rows.length - state.previewLimit)}명 더 보기</button>` : ''}
+
+    <h2 class="section-heading">엑셀로 저장</h2>
+    <div class="bottom-stack">
+      <button class="btn btn-outline btn-full btn-small" id="rawExcelButton"><i data-lucide="file-spreadsheet"></i> 1차 수집 전체 저장 (${formatN(state.rows.length)}명)</button>
+    </div>
+    <p class="helper">조건을 걸기 전에 모은 원본 그대로를 저장합니다. 최종 결과 저장은 화면 아래 파란 버튼입니다.</p>
+
+    <h2 class="section-heading">작업 저장</h2>
+    <div class="btn-row">
+      <button class="btn btn-outline btn-small" id="saveProjectButton"><i data-lucide="save"></i> 저장</button>
+      <button class="btn btn-outline btn-small" id="openProjectButton"><i data-lucide="folder-open"></i> 열기</button>
+    </div>
+    <input id="projectInput" type="file" accept="application/json,.json" hidden>
+    <p class="helper">저장한 파일을 다시 열면 모은 사람과 조건이 그대로 살아납니다.</p>`;
+
+  const est = estimateFor(state.target);
+  const bottom = `<button class="btn btn-primary btn-full" id="excelButton" ${rows.length ? '' : 'disabled'}><i data-lucide="file-spreadsheet"></i> 최종 결과 저장 (${formatN(rows.length)}명)</button>
+    <button class="btn btn-outline btn-full btn-small" id="moreCollectButton"><i data-lucide="plus"></i> ${formatN(state.target)}명 더 모으기 · ${formatDuration(est.seconds)}</button>`;
+
+  app.innerHTML = screenShell('result', content, bottom);
+
+  app.querySelectorAll('[data-field]').forEach(btn => {
+    btn.onclick = () => openFieldSheet(state.filterFields.find(f => f.col === btn.dataset.field));
+  });
+  $('#includeInput').oninput = e => { state.include = e.target.value; };
+  app.querySelectorAll('[data-example]').forEach(b => {
+    b.onclick = () => {
+      const input = $('#includeInput');
+      const current = parseKeywords(input.value);
+      const word = b.dataset.example;
+      if (current.some(v => normText(v) === normText(word))) return;
+      current.push(word);
+      input.value = current.join(', ');
+      state.include = input.value;
+    };
+  });
+  app.querySelectorAll('[data-mode]').forEach(b => { b.onclick = () => { state.matchMode = b.dataset.mode; render(); }; });
+  $('#applyFilterButton').onclick = applyFilters;
+  $('#resetFilterButton').onclick = resetFilters;
+  app.querySelectorAll('[data-row]').forEach(b => { b.onclick = () => openRowSheet(rows[Number(b.dataset.row)]); });
+  const more = $('#moreButton');
+  if (more) more.onclick = () => { state.previewLimit += PREVIEW_STEP; render(); };
+  $('#excelButton').onclick = () => saveExcel(state.finalRows, 'final');
+  $('#rawExcelButton').onclick = () => saveExcel(state.rows, 'raw');
+  $('#moreCollectButton').onclick = () => startCollect(true);
+  $('#saveProjectButton').onclick = saveProject;
+  $('#openProjectButton').onclick = () => $('#projectInput').click();
+  $('#projectInput').onchange = e => openProjectFile(e.target.files?.[0]);
+}
+
+// ---- 바텀시트 ---------------------------------------------------------
+function closeSheet() {
+  const modal = $('#modal');
+  modal.hidden = true;
+  modal.innerHTML = '';
+}
+function openFieldSheet(field) {
+  if (!field) return;
+  if (field.control === 'range') return openRangeSheet(field);
+  const selected = new Set(state.category[field.col] || []);
+  const modal = $('#modal');
+  modal.hidden = false;
+  const listHtml = options => options.map(opt => `
+    <button class="opt-line ${selected.has(opt) ? 'on' : ''}" data-opt="${esc(opt)}" role="checkbox" aria-checked="${selected.has(opt)}">
+      <span class="opt-text">${esc(prettyText(displayValue(field.col, opt)))}</span>
+      <span class="opt-count">${formatN(field.counts.get(opt) || 0)}</span>
+      <span class="opt-mark"><i data-lucide="check"></i></span>
+    </button>`).join('');
+  modal.innerHTML = `<div class="modal-backdrop" id="sheetBackdrop"><div class="modal-sheet" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <h2>${esc(fieldLabel(field.col))}</h2>
+      <button class="icon-button" id="sheetClose" aria-label="닫기"><i data-lucide="x"></i></button>
+    </div>
+    ${field.options.length > 12 ? '<input class="text-input" id="sheetSearch" placeholder="검색" style="margin-top:12px">' : ''}
+    <div class="modal-body" id="sheetList">${listHtml(field.options)}</div>
+    <div class="modal-foot">
+      <button class="btn btn-outline btn-small" id="sheetClear">상관 없음</button>
+      <button class="btn btn-primary btn-small" id="sheetApply">적용</button>
+    </div>
+  </div></div>`;
+  const list = $('#sheetList');
+  const bind = () => list.querySelectorAll('[data-opt]').forEach(btn => {
+    btn.onclick = () => {
+      const value = btn.dataset.opt;
+      if (selected.has(value)) { selected.delete(value); btn.classList.remove('on'); }
+      else { selected.add(value); btn.classList.add('on'); }
+      btn.setAttribute('aria-checked', String(selected.has(value)));
+    };
+  });
+  bind();
+  const search = $('#sheetSearch');
+  if (search) {
+    search.oninput = () => {
+      const q = normText(search.value);
+      const filtered = q ? field.options.filter(o => normText(displayValue(field.col, o)).includes(q) || normText(o).includes(q)) : field.options;
+      list.innerHTML = filtered.length ? listHtml(filtered) : '<p class="body-copy" style="padding:20px 4px">검색 결과가 없습니다.</p>';
+      bind();
+      renderIcons();
+    };
+  }
+  $('#sheetClose').onclick = closeSheet;
+  $('#sheetBackdrop').onclick = e => { if (e.target.id === 'sheetBackdrop') closeSheet(); };
+  $('#sheetClear').onclick = () => { delete state.category[field.col]; closeSheet(); render(); };
+  $('#sheetApply').onclick = () => {
+    if (selected.size) state.category[field.col] = [...selected];
+    else delete state.category[field.col];
+    closeSheet();
+    render();
+  };
+  renderIcons();
+}
+function readNumber(id, fallback) {
+  const el = $('#' + id);
+  const raw = el ? String(el.value ?? '').trim() : '';
+  if (!raw) return fallback;
+  const n = Number(raw.replace(/[^\d.\-]/g, ''));
+  return Number.isFinite(n) ? n : fallback;
+}
+function openRangeSheet(field) {
+  const b = field.bounds;
+  const cur = state.ranges[field.col] || { any: true, min: b.min, max: b.max };
+  const modal = $('#modal');
+  modal.hidden = false;
+  modal.innerHTML = `<div class="modal-backdrop" id="sheetBackdrop"><div class="modal-sheet" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <h2>${esc(fieldLabel(field.col))}</h2>
+      <button class="icon-button" id="sheetClose" aria-label="닫기"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <p class="body-copy">모은 데이터에서는 <b>${esc(formatN(b.min))} ~ ${esc(formatN(b.max))}</b> 사이입니다. 한쪽만 채워도 됩니다.</p>
+      <div class="range-row">
+        <input class="text-input" id="rangeMin" type="text" inputmode="numeric" autocomplete="off" value="${esc(cur.min ?? b.min)}" aria-label="최소값">
+        <span>~</span>
+        <input class="text-input" id="rangeMax" type="text" inputmode="numeric" autocomplete="off" value="${esc(cur.max ?? b.max)}" aria-label="최대값">
+      </div>
+      <p class="helper">비워 두면 그쪽 끝값이 자동으로 들어갑니다. 범위를 벗어난 값은 자동으로 맞춰집니다.</p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline btn-small" id="sheetClear">상관 없음</button>
+      <button class="btn btn-primary btn-small" id="sheetApply">적용</button>
+    </div>
+  </div></div>`;
+  $('#sheetClose').onclick = closeSheet;
+  $('#sheetBackdrop').onclick = e => { if (e.target.id === 'sheetBackdrop') closeSheet(); };
+  $('#sheetClear').onclick = () => { delete state.ranges[field.col]; closeSheet(); render(); };
+  $('#sheetApply').onclick = () => {
+    let min = readNumber('rangeMin', b.min);
+    let max = readNumber('rangeMax', b.max);
+    if (min > max) { const t = min; min = max; max = t; }
+    min = Math.min(Math.max(min, b.min), b.max);
+    max = Math.min(Math.max(max, b.min), b.max);
+    if (min <= b.min && max >= b.max) delete state.ranges[field.col];
+    else state.ranges[field.col] = { any: false, min, max };
+    closeSheet();
+    render();
+  };
+  renderIcons();
+}
+function openRowSheet(row) {
+  if (!row) return;
+  const cols = rowColumns(row);
+  const body = cols.map(c => {
+    const v = cellText(row[c]).trim();
+    if (!v) return '';
+    return `<div class="raw-field"><b>${esc(fieldLabel(c))}</b><span>${esc(v)}</span></div>`;
+  }).join('');
+  const role = personaRole(row);
+  const modal = $('#modal');
+  modal.hidden = false;
+  modal.innerHTML = `<div class="modal-backdrop" id="sheetBackdrop"><div class="modal-sheet" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <h2>${esc(personaTitle(row))}</h2>
+      <button class="icon-button" id="sheetClose" aria-label="닫기"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      ${role ? `<p class="persona-role" style="margin-bottom:12px">${esc(role)}</p>` : ''}
+      ${body || '<p class="body-copy">표시할 내용이 없습니다.</p>'}
+    </div>
+  </div></div>`;
+  $('#sheetClose').onclick = closeSheet;
+  $('#sheetBackdrop').onclick = e => { if (e.target.id === 'sheetBackdrop') closeSheet(); };
+  renderIcons();
+}
+
+// ---- 라우팅 · 화면 상태 유지 -------------------------------------------
+function goBack() {
+  if (state.busy) return;
+  const target = prevScreen();
+  if (!target) return;
+  closeSheet();
+  state.screen = target;
+  state.error = '';
+  render();
+}
+function goForward() {
+  if (state.busy) return;
+  const target = nextScreen();
+  if (!target) return;
+  closeSheet();
+  state.screen = target;
+  state.error = '';
+  render();
+}
+function goHome() {
+  if (state.busy) return;
+  if (state.rows.length && !confirm('처음으로 돌아가면 모은 데이터가 사라집니다. 계속할까요?')) return;
+  closeSheet();
+  state.country = null;
+  resetConditions();
+  state.rows = []; state.finalRows = []; state.filterFields = [];
+  state.nextOffset = null; state.filterApplied = false; state.keywordApplied = false;
+  state.include = ''; state.matchMode = 'any';
+  state.error = ''; state.notice = '';
+  state.screen = 'intro';
+  render();
+}
+
+let lastScreen = null;
+const scrollMemory = Object.create(null);
+function currentScrollY() {
+  return window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
+}
+function captureView() {
+  const active = document.activeElement;
+  const editable = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA');
+  return {
+    scrollY: currentScrollY(),
+    focusId: editable && active.id ? active.id : null,
+    selStart: editable ? active.selectionStart : null,
+    selEnd: editable ? active.selectionEnd : null,
+  };
+}
+function restoreView(view) {
+  try { window.scrollTo(0, view.scrollY); } catch { /* noop */ }
+  if (!view.focusId) return;
+  const el = $('#' + view.focusId);
+  if (!el) return;
+  try {
+    el.focus({ preventScroll: true });
+    if (view.selStart != null && typeof el.setSelectionRange === 'function') {
+      el.setSelectionRange(view.selStart, view.selEnd);
+    }
+  } catch { /* noop */ }
+}
+function render() {
+  const app = $('#app');
+  const screen = state.screen;
+  const sameScreen = lastScreen === screen;
+  const view = sameScreen ? captureView() : null;
+  if (!sameScreen && lastScreen) scrollMemory[lastScreen] = currentScrollY();
+
+  if (screen === 'intro') renderIntro(app);
+  else if (screen === 'country') renderCountry(app);
+  else if (screen === 'meta') renderMeta(app);
+  else if (screen === 'size') renderSize(app);
+  else if (screen === 'collecting') renderCollecting(app);
+  else if (screen === 'result') renderResult(app);
+
+  const back = $('#backButton'), fwd = $('#forwardButton'), home = $('#homeButton');
+  if (back) back.onclick = goBack;
+  if (fwd) fwd.onclick = goForward;
+  if (home) home.onclick = goHome;
+
+  lastScreen = screen;
+  if (view) restoreView(view);
+  else { try { window.scrollTo(0, scrollMemory[screen] || 0); } catch { /* noop */ } }
+  renderIcons();
+}
+
+window.addEventListener('beforeunload', e => {
+  if (state.rows.length) { e.preventDefault(); e.returnValue = ''; }
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSheet(); });
+
+render();
+})();
+</script>
+</body>
+</html>
